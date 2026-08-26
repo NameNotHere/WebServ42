@@ -30,17 +30,6 @@ LOCATION DIRECTIVES:
     cgi
 */
 
-/*| Directive           | Purpose                                     |
-| ------------------- | ------------------------------------------- |
-| `listen`            | Port/IP the server listens on               |
-| `server_name`       | Hostname used to select a virtual server    |
-| `root`              | Default filesystem root                     |
-| `index`             | Default file when URI points to a directory |
-| `allow_methods`     | Allowed HTTP methods                        |
-| `client_body_limit` | Maximum request-body size                   |
-| `error_page`        | Custom error page                           |
-*/
-
 enum    CONF_TOKEN
 {
     LEFTBRACE,
@@ -78,7 +67,7 @@ struct ServerConfig
     unsigned int listen;
     std::string root;
     std::vector<LocationConfig> locations;
-    std::vector<std::string> allow_methods; //one day itll be an enum vector but not today
+    std::vector<std::string> allowed_methods; //one day itll be an enum vector but not today
 };
 
 void expect(

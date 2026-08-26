@@ -1,3 +1,7 @@
+!<arch>
+//                                              18        `
+ConfigParser.cpp/
+/0              0           0     0     644     4651      `
 #include "Configuration.hpp"
 #include <iostream>
 
@@ -6,7 +10,7 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
     std::string value;
     std::string keyword = tokens[pos].word;
     pos++;
-        // more values here too
+
     expect(tokens, pos, WORD);
     value = tokens[pos - 1].word;
     expect(tokens, pos, SEMICOLON);
@@ -19,8 +23,11 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
         throw std::runtime_error("unknown directive: " + keyword);
 }
 
-void parse_location_directive(const std::vector<Token> &tokens, size_t &pos, LocationConfig &location)
-{ // need to expand this to accept more hahaha 
+void parse_location_directive(
+    const std::vector<Token>& tokens,
+    size_t& pos,
+    LocationConfig& location)
+{
     std::string keyword = tokens[pos].word;
     pos++;
 
@@ -49,7 +56,7 @@ LocationConfig parse_location(
     expect(tokens, pos, LEFTBRACE);
     // note 
     while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
-        parse_location_directive(tokens, pos, location);
+        pos++;//parse_location_directive();
     expect(tokens, pos, RIGHTBRACE);
     return location;
 }
@@ -72,7 +79,7 @@ ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
                    tokens[pos].type != SEMICOLON)
             {
                 expect(tokens, pos, WORD);
-                server.allowed_methods.push_back(tokens[pos - 1].word);
+                server.allow_methods.push_back(tokens[pos - 1].word);
             }
             expect(tokens, pos, SEMICOLON);
         }
@@ -170,7 +177,7 @@ int main(int argc, char** argv)
     
     std::cout << "-------------------LEX AND TOK-----------\n";
     std::vector<Token> lexxer = lex(config);
-    for (long unsigned int i = 0; i < lexxer.size(); i++)
+    for (int i = 0; i < lexxer.size(); i++)
         std::cout << lexxer[i].type  << "  " << lexxer[i].word << "\n";
     //parse
     std::vector<ServerConfig> servers;
