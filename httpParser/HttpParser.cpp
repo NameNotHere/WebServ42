@@ -2,20 +2,36 @@
 
 void HttpParser::parseHttpRequest(const std::string& request)
 {
+	if(!checkMethod(request))
+		std::cout << "Invalid HTTP (Method)\n";
+	if(!checkTarget(request))
+		std::cout << "Invalid HTTP (Target)\n";
+
+}
+
+bool HttpParser::checkTarget(const std::string& request)
+{
+	size_t firstSpace = request.find(' ');
+
+	if(request[firstSpace + 1] != '/')
+		return false;
+
+	size_t secondSpace = request.find(' ', firstSpace + 1);
+	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
+	std::cout << target << "\n";
+	return true;
+}
+
+bool HttpParser::checkMethod(const std::string& request)
+{
 	size_t pos = request.find(' ');
 
 	if(pos == std::string::npos)
-		std::cout << "Invalid HTTP (Method)\n";
+		return false;
 
 	std::string method = request.substr(0, pos);
 	std::cout << method << "\n";
-
-	if(!checkMethod(method))
-		std::cout << "Invalid HTTP (Method)\n";
-}
-
-bool HttpParser::checkMethod(const std::string& method)
-{
+	
 	for(size_t i = 0; i < method.size(); i++)
 	{
 		if(!isalnum(method[i]) && method[i] != '-' && method[i] != '!' && method[i] != '#'
@@ -28,7 +44,6 @@ bool HttpParser::checkMethod(const std::string& method)
 	}
 	return true;
 }
-
 
 HttpParser::HttpParser(){}
 

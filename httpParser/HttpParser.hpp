@@ -15,7 +15,8 @@ public:
 	~HttpParser();
 
 	void parseHttpRequest(const std::string& request);
-	bool checkMethod(const std::string& method);
+	bool checkMethod(const std::string& request);
+	bool checkTarget(const std::string& request);
 
 };
 
