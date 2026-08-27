@@ -1,6 +1,7 @@
 #include "HttpParser.hpp"
 
-//need to fix outofbouns for GET
+//Need to do char check for targetAndVersion
+//Fix || statement
 
 void HttpParser::parseHttpRequest(const std::string& request)
 {
