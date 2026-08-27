@@ -16,7 +16,7 @@ public:
 
 	void parseHttpRequest(const std::string& request);
 	bool checkMethod(const std::string& request);
-	bool checkTarget(const std::string& request);
+	bool checkTargetAndVersion(const std::string& request);
 
 };
 
