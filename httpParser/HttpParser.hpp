@@ -12,6 +12,8 @@ private:
 
 public:
 	HttpParser();
+	HttpParser(const HttpParser& other);
+	HttpParser& operator=(const HttpParser& other);
 	~HttpParser();
 
 	void parseHttpRequest(const std::string& request);

@@ -69,4 +69,18 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 
 HttpParser::HttpParser(){}
 
+HttpParser::HttpParser(const HttpParser& other)
+	: _method(other._method), _target(other._target), _version(other._version){}
+
+HttpParser& HttpParser::operator=(const HttpParser& other)
+{
+	if (this != &other)
+	{
+		_method = other._method;
+		_target = other._target;
+		_version = other._version;
+	}
+	return *this;
+}
+
 HttpParser::~HttpParser(){}
