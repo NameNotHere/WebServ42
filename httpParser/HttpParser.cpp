@@ -48,11 +48,8 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 	if(secondSpace == std::string::npos)
 		return false;
 
-	if(request[secondSpace + 1] != 'H' || request[secondSpace + 2] != 'T' 
-		|| request[secondSpace + 3] != 'T' || request[secondSpace + 4] != 'P'
-		|| request[secondSpace + 5] != '/' || request[secondSpace + 6] != '1'
-		|| request[secondSpace + 7] != '.' || request[secondSpace + 8] != '1'
-		|| request[secondSpace + 9] != '\r' || request[secondSpace + 10] != '\n')
+	std::string ver = request.substr(secondSpace + 1, 10);
+	if(ver != "HTTP/1.1\r\n")
 		return false;
 
 	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
