@@ -1,6 +1,7 @@
 #ifndef HTTP_PARSER_HPP
 #define HTTP_PARSER_HPP
 
+#include <map>
 #include <string>
 #include <iostream>
 
@@ -9,6 +10,7 @@ private:
 	std::string _method;
 	std::string _target;
 	std::string _version;
+	std::map<std::string, std::string> _headers;
 
 public:
 	HttpParser();
@@ -20,6 +22,9 @@ public:
 	bool requestLine(const std::string& request);
 	bool checkMethod(const std::string& request);
 	bool checkTargetAndVersion(const std::string& request);
+	bool validChar(const std::string& method);
+
+	bool headers(const std::string& request);
 
 };
 

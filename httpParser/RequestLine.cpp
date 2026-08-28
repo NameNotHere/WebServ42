@@ -15,18 +15,9 @@ bool HttpParser::checkMethod(const std::string& request)
 		return false;
 
 	std::string method = request.substr(0, pos);
-	// std::cout << method << "\n";
-	
-	for(size_t i = 0; i < method.size(); i++)
-	{
-		if(!isalnum(method[i]) && method[i] != '-' && method[i] != '!' && method[i] != '#'
-		   && method[i] != '$' && method[i] != '%' && method[i] != '&' && method[i] != '\''
-		   && method[i] != '*' && method[i] != '+' && method[i] != '.' && method[i] != '^'
-		   && method[i] != '_' && method[i] != '`' && method[i] != '|' && method[i] != '~')
-		{
-			return false;
-		}
-	}
+	if(!validChar(method))
+		return false;
+
 	_method = method;
 	return true;
 }
@@ -60,5 +51,20 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 	version = request.substr(secondSpace + 1, 8);
 	_version = version;
 	
+	return true;
+}
+
+bool HttpParser::validChar(const std::string& method)
+{
+	for(size_t i = 0; i < method.size(); i++)
+	{
+		if(!isalnum(method[i]) && method[i] != '-' && method[i] != '!' && method[i] != '#'
+		   && method[i] != '$' && method[i] != '%' && method[i] != '&' && method[i] != '\''
+		   && method[i] != '*' && method[i] != '+' && method[i] != '.' && method[i] != '^'
+		   && method[i] != '_' && method[i] != '`' && method[i] != '|' && method[i] != '~')
+		{
+			return false;
+		}
+	}
 	return true;
 }

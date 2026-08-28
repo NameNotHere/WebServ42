@@ -1,14 +1,16 @@
 #include "HttpParser.hpp"
 
-//Need to do char check for targetAndVersion
-//Fix || statement
-
 void HttpParser::parseHttpRequest(const std::string& request)
 {
 	if(!requestLine(request))
 		std::cout << "Invalid HTTP Request!\n";
 	else
 		std::cout << "Valid HTTP Request!\n";
+
+	if(!headers(request))
+		std::cout << "Invalid Header\n";
+	else
+		std::cout << "Valid Header\n";
 }
 
 HttpParser::HttpParser(){}

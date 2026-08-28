@@ -8,6 +8,7 @@ OBJ_DIR		= obj
 SRCS		= httpParser/HttpParser.cpp \
 			  httpParser/HttpTester.cpp \
 			  httpParser/RequestLine.cpp \
+			  httpParser/Headers.cpp \
 			  #ConfigParser.cpp \
 			  	
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
