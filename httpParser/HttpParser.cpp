@@ -6,7 +6,7 @@
 void HttpParser::parseHttpRequest(const std::string& request)
 {
 	if(!checkMethod(request) || !checkTargetAndVersion(request))
-		std::cerr << "Invalid HTTP Request!\n";
+		std::cout << "Invalid HTTP Request!\n";
 	else
 		std::cout << "Valid HTTP Request!\n";
 }
@@ -48,16 +48,15 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 	if(secondSpace == std::string::npos)
 		return false;
 
-	std::string ver = request.substr(secondSpace + 1, 10);
-	if(ver != "HTTP/1.1\r\n")
+	std::string version = request.substr(secondSpace + 1, 10);
+	if(version != "HTTP/1.1\r\n")
 		return false;
 
 	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
 	_target = target;
-	// std::cout << target << "\n";
-	std::string version = request.substr(secondSpace + 1, 8);
+
+	version = request.substr(secondSpace + 1, 8);
 	_version = version;
-	// std::cout << version << "\n";
 	
 	return true;
 }
