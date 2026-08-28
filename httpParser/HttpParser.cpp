@@ -53,7 +53,15 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 		return false;
 
 	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
+	std::string illegal = "<>\"{}|\\^`' '";
+	for(size_t i = 0; i < target.size(); i++)
+	{
+		if(illegal.find(target[i]) != std::string::npos)
+			return false;
+	}
 	_target = target;
+	// < > " { } | \ ^ `  space
+
 
 	version = request.substr(secondSpace + 1, 8);
 	_version = version;
