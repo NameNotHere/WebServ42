@@ -26,6 +26,7 @@ public:
 
 	bool headers(const std::string& request);
 	void lowerCase(std::string& str);
+	void ftTrim(std::string& value);
 
 };
 

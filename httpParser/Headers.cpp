@@ -26,23 +26,7 @@ bool HttpParser::headers(const std::string& request)
 			return false;
 
 		// Trim white space from both ends
-		size_t start = value.find_first_not_of(" \t");
-		if(start != std::string::npos)
-			value = value.substr(start);
-		std::cout << "Value after start trim = " << value << "\n";
-
-		size_t end = value.find_last_not_of(" \t");
-		if(end != std::string::npos)
-			value = value.substr(0, end + 1);
-		std::cout << "Value after end trim = " << value << "\n";
-
-		// Check for white space within value
-		// size_t spaces = value.find(" ");
-		// if(spaces != std::string::npos)
-		// 	return false;
-		// spaces = value.find("\t");
-		// if(spaces != std::string::npos)
-		// 	return false;
+		ftTrim(value);
 		
 		if(value.find("\n") != std::string::npos || value.find("\r") != std::string::npos)
 			return false;
@@ -61,6 +45,19 @@ bool HttpParser::headers(const std::string& request)
 	return true;
 }
 
+void HttpParser::ftTrim(std::string& value)
+{
+	size_t start = value.find_first_not_of(" \t");
+	if(start != std::string::npos)
+		value = value.substr(start);
+	std::cout << "Value after start trim = " << value << "\n";
+
+	size_t end = value.find_last_not_of(" \t");
+	if(end != std::string::npos)
+		value = value.substr(0, end + 1);
+	std::cout << "Value after end trim = " << value << "\n";
+}
+
 void HttpParser::lowerCase(std::string& str)
 {
 	for(size_t i = 0; i < str.size(); i++)
@@ -68,3 +65,11 @@ void HttpParser::lowerCase(std::string& str)
 		str[i] = tolower(str[i]);
 	}
 }
+
+// Check for white space within value
+// size_t spaces = value.find(" ");
+// if(spaces != std::string::npos)
+// 	return false;
+// spaces = value.find("\t");
+// if(spaces != std::string::npos)
+// 	return false;
