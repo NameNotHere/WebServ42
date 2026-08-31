@@ -17,16 +17,26 @@ public:
 	HttpParser(const HttpParser& other);
 	HttpParser& operator=(const HttpParser& other);
 	~HttpParser();
-
+	
+	// Request Line
 	void parseHttpRequest(const std::string& request);
 	bool requestLine(const std::string& request);
 	bool checkMethod(const std::string& request);
 	bool checkTargetAndVersion(const std::string& request);
 	bool validChar(const std::string& method);
-
+	// Headers
 	bool headers(const std::string& request);
-	void lowerCase(std::string& str);
 	void ftTrim(std::string& value);
+	void lowerCase(std::string& str);
+	bool checkHost(const std::string& value);
+	bool checkExpect(const std::string& value);
+	bool checkConnection(const std::string& value);
+	bool checkContentType(const std::string& value);
+	bool checkContentLength(const std::string& value);
+	bool checkTransferEncoding(const std::string& value);
+	bool checkValue(const std::string& name, const std::string& value);
+	bool checkUserAgent(const std::string& value);
+	bool checkWhiteSpace(const std::string& value);
 
 };
 
