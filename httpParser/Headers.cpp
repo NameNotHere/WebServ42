@@ -27,9 +27,9 @@ bool HttpParser::headers(const std::string& request)
 
 		// Trim white space from both ends
 		ftTrim(value);
-		
-		if(value.find("\n") != std::string::npos || value.find("\r") != std::string::npos)
-			return false;
+
+		if (!checkFieldValue(value))
+    		return false;
 
 		lowerCase(name);
 		_headers[name] = value;
@@ -48,54 +48,20 @@ bool HttpParser::headers(const std::string& request)
 
 bool HttpParser::checkValue(const std::string& name, const std::string& value)
 {
-	if(name == "host")
-	{
-		if(!checkHost(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "content-length")
-	{
-		if(!checkContentLength(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "transfer-encoding")
-	{
-		if(!checkTransferEncoding(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "content-type")
-	{
-		if(!checkContentType(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "connection")
-	{
-		if(!checkConnection(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "expect")
-	{
-		if(!checkExpect(value))
-			return false;
-		else
-			return true;
-	}
-	if(name == "user-agent")
-	{
-		if(!checkUserAgent(value))
-			return false;
-		else
-			return true;
-	}
-	return false;
+    if (name == "host")
+        return checkHost(value);
+    if (name == "content-length")
+        return checkContentLength(value);
+    if (name == "transfer-encoding")
+        return checkTransferEncoding(value);
+    if (name == "content-type")
+        return checkContentType(value);
+    if (name == "connection")
+        return checkConnection(value);
+    if (name == "expect")
+        return checkExpect(value);
+    if (name == "user-agent")
+        return checkUserAgent(value);
+
+    return true;
 }

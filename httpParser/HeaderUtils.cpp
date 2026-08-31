@@ -31,3 +31,15 @@ void HttpParser::lowerCase(std::string& str)
 		str[i] = tolower(str[i]);
 	}
 }
+
+bool HttpParser::checkFieldValue(const std::string& value)
+{
+    for (size_t i = 0; i < value.size(); i++)
+    {
+        unsigned char c = value[i];
+
+        if ((c < 0x20 && c != '\t') || c == 0x7F)
+            return false;
+    }
+    return true;
+}

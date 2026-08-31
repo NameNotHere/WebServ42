@@ -37,6 +37,7 @@ public:
 	bool checkValue(const std::string& name, const std::string& value);
 	bool checkUserAgent(const std::string& value);
 	bool checkWhiteSpace(const std::string& value);
+	bool checkFieldValue(const std::string& value);
 
 };
 

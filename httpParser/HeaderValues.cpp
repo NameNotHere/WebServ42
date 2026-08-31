@@ -1,5 +1,7 @@
 #include "HttpParser.hpp"
 
+// Need to hande IPV6
+
 bool HttpParser::checkHost(const std::string& value)
 {
 	if(value.empty())
@@ -44,6 +46,17 @@ bool HttpParser::checkHost(const std::string& value)
 	return true;
 }
 
+bool HttpParser::checkConnection(const std::string& value)
+{
+	std::string connection = value;
+
+	lowerCase(connection);
+	if(connection != "keep-alive" && connection != "close")
+		return false;
+
+	return true;
+}
+
 bool HttpParser::checkUserAgent(const std::string& value)
 {
 	(void) value;
@@ -63,12 +76,6 @@ bool HttpParser::checkTransferEncoding(const std::string& value)
 }
 
 bool HttpParser::checkContentType(const std::string& value)
-{
-	(void) value;
-	return true;
-}
-
-bool HttpParser::checkConnection(const std::string& value)
 {
 	(void) value;
 	return true;
