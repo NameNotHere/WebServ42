@@ -5,7 +5,7 @@ CXXFLAGS	= -Wall -Wextra -Werror -std=c++11
 
 OBJ_DIR		= obj
 
-SRCS		= ConfigParser.cpp
+SRCS		= ConfigParser/ConfigParser.cpp
 OBJS		= $(SRCS:$(SRCS)/%.cpp=$(OBJ_DIR)/%.o)
 
 RM			= rm -rf
