@@ -25,6 +25,7 @@ public:
 	bool validChar(const std::string& method);
 
 	bool headers(const std::string& request);
+	void lowerCase(std::string& str);
 
 };
 

@@ -35,21 +35,29 @@ bool HttpParser::headers(const std::string& request)
 	std::cout << "Value after end trim = " << value << "\n";
 
 	// Check for white space within value
-	size_t spaces = value.find(" ");
-	if(spaces != std::string::npos)
-		return false;
-	spaces = value.find("\t");
-	if(spaces != std::string::npos)
-		return false;
+	// size_t spaces = value.find(" ");
+	// if(spaces != std::string::npos)
+	// 	return false;
+	// spaces = value.find("\t");
+	// if(spaces != std::string::npos)
+	// 	return false;
 	
 	if(value.find("\n") != std::string::npos || value.find("\r") != std::string::npos)
 		return false;
 
+	lowerCase(name);
+	_headers[name] = value;
+
 	std::cout << "Name = " << name << "\n";
 	std::cout << "Value = " << value << "\n";
-	
-	// Need to sort out case sensitive HoSt ect
-	// Only trim whitespace based on the type of name
 
 	return true;
+}
+
+void HttpParser::lowerCase(std::string& str)
+{
+	for(size_t i = 0; i < str.size(); i++)
+	{
+		str[i] = tolower(str[i]);
+	}
 }
