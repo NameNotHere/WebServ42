@@ -30,6 +30,17 @@ LOCATION DIRECTIVES:
     cgi
 */
 
+struct  server_details
+{
+    int listen;
+    std::string server_name;
+    int root;
+    int index;
+    std::string allow_methods;
+    size_t client_body_limit;
+    std::vector<std::string> error_page;
+};
+
 enum    CONF_TOKEN
 {
     LEFTBRACE,
@@ -70,14 +81,12 @@ struct ServerConfig
     std::vector<std::string> allowed_methods; //one day itll be an enum vector but not today
 };
 
-void expect(
-    const std::vector<Token>& tokens,
-    size_t& pos,
-    CONF_TOKEN type)
+std::vector<Token> lex(const std::string& text);
+
+void expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type)
 {
     if (pos >= tokens.size() || tokens[pos].type != type)
         throw std::runtime_error("unexpected token");
-
     pos++;
 }
 

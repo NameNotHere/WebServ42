@@ -7,9 +7,9 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
     std::string keyword = tokens[pos].word;
     pos++;
         // more values here too
-    expect(tokens, pos, WORD);
+    expect_and_increase(tokens, pos, WORD);
     value = tokens[pos - 1].word;
-    expect(tokens, pos, SEMICOLON);
+    expect_and_increase(tokens, pos, SEMICOLON);
 
     if (keyword == "listen")
         server.listen = std::stoi(value);
@@ -26,9 +26,9 @@ void parse_location_directive(const std::vector<Token> &tokens, size_t &pos, Loc
 
     if (keyword == "root")
     {
-        expect(tokens, pos, WORD);
+        expect_and_increase(tokens, pos, WORD);
         location.root = tokens[pos - 1].word;
-        expect(tokens, pos, SEMICOLON);
+        expect_and_increase(tokens, pos, SEMICOLON);
     }
     else
     {
@@ -43,14 +43,13 @@ LocationConfig parse_location(
 {
     LocationConfig location;
 
-    expect(tokens, pos, WORD);
-    expect(tokens, pos, WORD);
+    expect_and_increase(tokens, pos, WORD);
+    expect_and_increase(tokens, pos, WORD);
     location.path = tokens[pos - 1].word;
-    expect(tokens, pos, LEFTBRACE);
-    // note 
+    expect_and_increase(tokens, pos, LEFTBRACE);
     while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
         parse_location_directive(tokens, pos, location);
-    expect(tokens, pos, RIGHTBRACE);
+    expect_and_increase(tokens, pos, RIGHTBRACE);
     return location;
 }
 
@@ -58,8 +57,8 @@ ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
 {
     ServerConfig server;
 
-    expect(tokens, pos, WORD);
-    expect(tokens, pos, LEFTBRACE);
+    expect_and_increase(tokens, pos, WORD);
+    expect_and_increase(tokens, pos, LEFTBRACE);
     while (tokens[pos].type != RIGHTBRACE && pos <= tokens.size())    {
         if (tokens[pos].word == "location")
         {
@@ -71,15 +70,15 @@ ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
             while (pos < tokens.size() &&
                    tokens[pos].type != SEMICOLON)
             {
-                expect(tokens, pos, WORD);
+                expect_and_increase(tokens, pos, WORD);
                 server.allowed_methods.push_back(tokens[pos - 1].word);
             }
-            expect(tokens, pos, SEMICOLON);
+            expect_and_increase(tokens, pos, SEMICOLON);
         }
         else
             parse_server_directive(tokens, pos, server);
     }
-    expect(tokens, pos, RIGHTBRACE);
+    expect_and_increase(tokens, pos, RIGHTBRACE);
     return server;
 }
 
@@ -94,56 +93,6 @@ void parse(std::vector<ServerConfig> &servers, const std::vector<Token>& tokens)
         else
             throw std::runtime_error("expected 'server'");
     }
-}
-
-std::vector<Token> lex(const std::string& text)
-{
-    std::vector<Token> tokens;
-    size_t j, i = 0;
-    size_t line = 1;
-
-    while (i < text.size())
-    {
-        if (text[i] == '#') // hehe
-            while (++i < text.size() && text[i] != '\n');
-        if (text[i] == '\n')
-        {
-            line++;
-            i++;
-            continue;
-        }
-        if (std::isspace(static_cast<unsigned char>(text[i])))
-        {
-            i++;
-            continue;
-        }
-        if (text[i] == '{')
-        {
-            tokens.push_back({LEFTBRACE, "{", line});
-            i++;
-            continue;
-        }
-        if (text[i] == '}')
-        {
-            tokens.push_back({RIGHTBRACE, "}", line});
-            i++;
-            continue;
-        }
-        if (text[i] == ';')
-        {
-            tokens.push_back({SEMICOLON, ";", line});
-            i++;
-            continue;
-        }
-        j = i;
-        while (j < text.size() && !std::isspace(static_cast<unsigned char>(text[j]))
-            && text[j] != '{' && text[j] != '}' && text[j] != ';')
-            j++;
-        tokens.push_back({WORD, text.substr(i, j - i), line});
-        i = j;
-    }
-
-    return tokens;
 }
 
 int main(int argc, char** argv)
