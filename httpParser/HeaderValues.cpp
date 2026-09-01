@@ -75,18 +75,21 @@ bool HttpParser::checkContentType(const std::string& value)
 	return true;
 }
 
+bool HttpParser::checkTransferEncoding(const std::string& value)
+{
+	std::string chunked = value;
+
+	lowerCase(chunked);
+	if(chunked != "chunked")
+		return false;
+	return true;
+}
+
 bool HttpParser::checkUserAgent(const std::string& value)
 {
 	(void) value;
 	return true;
 }
-
-bool HttpParser::checkTransferEncoding(const std::string& value)
-{
-	(void) value;
-	return true;
-}
-
 
 bool HttpParser::checkExpect(const std::string& value)
 {
