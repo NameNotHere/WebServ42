@@ -38,6 +38,8 @@ public:
 	bool checkUserAgent(const std::string& value);
 	bool checkWhiteSpace(const std::string& value);
 	bool checkFieldValue(const std::string& value);
+	bool checkMediaType(const std::string& mediaType);
+	bool checkMediaParam(const std::string& param);
 
 };
 
