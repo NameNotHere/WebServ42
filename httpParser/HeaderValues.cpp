@@ -14,7 +14,7 @@ bool HttpParser::checkHost(const std::string& value)
 		return false;
 
 	std::string hostname = value.substr(0, colon);
-	std::cout << "Hostname = " << hostname << "\n";
+	std::cout << "Hostname:" << hostname << "\n";
 
 	for(size_t i = 0; i < hostname.size(); i++)
 	{
@@ -26,7 +26,7 @@ bool HttpParser::checkHost(const std::string& value)
 	if(port.empty())
 		return false;
 
-	std::cout << "Port = " << port << "\n";
+	std::cout << "Port:" << port << "\n";
 	for(size_t i = 0; i < port.size(); i++)
 	{
 		if(!isdigit(port[i]))
@@ -57,13 +57,25 @@ bool HttpParser::checkConnection(const std::string& value)
 	return true;
 }
 
-bool HttpParser::checkUserAgent(const std::string& value)
+bool HttpParser::checkContentLength(const std::string& value)
+{
+	if(value.empty())
+		return false;
+	for(size_t i = 0; i < value.size(); i++)
+	{
+		if(!isdigit(value[i]))
+			return false;
+	}
+	return true;
+}
+
+bool HttpParser::checkContentType(const std::string& value)
 {
 	(void) value;
 	return true;
 }
 
-bool HttpParser::checkContentLength(const std::string& value)
+bool HttpParser::checkUserAgent(const std::string& value)
 {
 	(void) value;
 	return true;
@@ -75,11 +87,6 @@ bool HttpParser::checkTransferEncoding(const std::string& value)
 	return true;
 }
 
-bool HttpParser::checkContentType(const std::string& value)
-{
-	(void) value;
-	return true;
-}
 
 bool HttpParser::checkExpect(const std::string& value)
 {

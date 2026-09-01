@@ -13,7 +13,6 @@ bool HttpParser::headers(const std::string& request)
 			return false;
 
 		std::string header = request.substr(posStart + 2, posFin - posStart - 2);
-		std::cout << "Header = " << header << "\n";
 		
 		size_t colon = header.find(":");
 		if(colon == std::string::npos)
@@ -21,6 +20,7 @@ bool HttpParser::headers(const std::string& request)
 		
 		std::string name = header.substr(0, colon);
 		std::string value = header.substr(colon + 1);
+		std::cout << "Header:" << header << "\n";
 
 		if(!validChar(name))
 			return false;
@@ -36,8 +36,8 @@ bool HttpParser::headers(const std::string& request)
 		if(!checkValue(name, value))
 			return false;
 
-		std::cout << "Name = " << name << "\n";
-		std::cout << "Value = " << value << "\n\n";
+		std::cout << "Name:" << name << "\n";
+		std::cout << "Value:" << value << "\n\n";
 
 		posStart = posFin;
 		if(request[posStart + 2] == '\r' && request[posStart + 3] == '\n')
