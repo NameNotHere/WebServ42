@@ -11,6 +11,7 @@ SRCS		= httpParser/HttpParser.cpp \
 			  httpParser/Headers.cpp \
 			  httpParser/HeaderUtils.cpp \
 			  httpParser/HeaderValues.cpp \
+			  httpParser/ContentType.cpp \
 			  #ConfigParser.cpp \
 			  	
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
