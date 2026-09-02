@@ -51,3 +51,10 @@ std::vector<Token> lex(const std::string& text)
 
     return tokens;
 }
+
+void expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type)
+{
+    if (pos >= tokens.size() || tokens[pos].type != type)
+        throw std::runtime_error("unexpected token");
+    pos++;
+}

@@ -6,30 +6,6 @@
 #include <vector>
 #include <string>
 
-
-/*BLOCKS:
-    server
-    location
-
-SERVER DIRECTIVES:
-    listen
-    server_name
-    root
-    index
-    allow_methods
-    client_body_limit
-    error_page
-
-LOCATION DIRECTIVES:
-    root
-    index
-    allow_methods
-    autoindex
-    return
-    upload_dir
-    cgi
-*/
-
 struct  server_details
 {
     int listen;
@@ -81,13 +57,8 @@ struct ServerConfig
     std::vector<std::string> allowed_methods; //one day itll be an enum vector but not today
 };
 
-std::vector<Token> lex(const std::string& text);
+std::vector<Token>	lex(const std::string& text);
 
-void expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type)
-{
-    if (pos >= tokens.size() || tokens[pos].type != type)
-        throw std::runtime_error("unexpected token");
-    pos++;
-}
+void				expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type);
 
 #endif

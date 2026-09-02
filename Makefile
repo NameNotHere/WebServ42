@@ -5,15 +5,17 @@ CXXFLAGS	= -Wall -Wextra -Werror -std=c++11
 
 OBJ_DIR		= obj
 
-SRCS		= httpParser/HttpParser.cpp \
+SRCSHTTP	= httpParser/HttpParser.cpp \
 			  httpParser/HttpTester.cpp \
 			  httpParser/RequestLine.cpp \
 			  httpParser/Headers.cpp \
 			  httpParser/HeaderUtils.cpp \
 			  httpParser/HeaderValues.cpp \
-			  #ConfigParser.cpp \
+
+SRCCONFIG =   ConfigParser/ConfigParser.cpp \
+			  ConfigParser/ConfigLex.cpp \
 			  	
-OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
+OBJS 		= $(SRCCONFIG:%.cpp=$(OBJ_DIR)/%.o)
 
 RM			= rm -rf
 
