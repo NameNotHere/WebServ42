@@ -2,6 +2,7 @@
 
 // Still need to accept "" on the media params
 
+
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
@@ -19,6 +20,7 @@ bool HttpParser::checkContentType(const std::string& value)
 		
 		std::string paramList = value.substr(semi + 1);
 		ftTrim(paramList);
+
 		std::cout << "ParamList:" << paramList << "\n";
 		if(paramList.empty())
 			return false;
@@ -91,7 +93,33 @@ bool HttpParser::checkMediaParam(const std::string& param)
 	std::string value = param.substr(equals + 1);
 	std::cout << "ParamValue:" << value << "\n";
 
-	if(!validChar(name) || !validChar(value))
+	if(!validChar(name) || !validCharParam(value))
 		return false;
+	return true;
+}
+
+bool HttpParser::validCharParam(const std::string& value)
+{
+	size_t quoteFlag = 0;
+
+	for(size_t i = 0; i < value.size(); i++)
+	{
+		if(!isalnum(value[i]) && value[i] != '-' && value[i] != '!' && value[i] != '#'
+		   && value[i] != '$' && value[i] != '%' && value[i] != '&' && value[i] != '\''
+		   && value[i] != '*' && value[i] != '+' && value[i] != '.' && value[i] != '^'
+		   && value[i] != '_' && value[i] != '`' && value[i] != '|' && value[i] != '~')
+		{
+			if((value[i] == '\"' && i == 0) || (value[i] == '\"' && i == value.size() - 1))
+			{
+				quoteFlag++;
+				continue;
+			}
+			return false;
+		}
+	}
+
+	if(quoteFlag != 0 && quoteFlag != 2)
+		return false;
+
 	return true;
 }
