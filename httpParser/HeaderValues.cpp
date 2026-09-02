@@ -90,6 +90,12 @@ bool HttpParser::checkUserAgent(const std::string& value)
 
 bool HttpParser::checkExpect(const std::string& value)
 {
-	(void) value;
+	std::string expectValue = value;
+
+	lowerCase(expectValue);
+
+	if(expectValue != "100-continue")
+		return false;
+
 	return true;
 }
