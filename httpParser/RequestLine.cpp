@@ -28,8 +28,6 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 
 	if(firstSpace == std::string::npos)
 		return false;
-	if(request[firstSpace + 1] != '/')
-		return false;
 
 	size_t secondSpace = request.find(' ', firstSpace + 1);
 	if(secondSpace == std::string::npos)
