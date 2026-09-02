@@ -24,6 +24,10 @@ public:
 	bool checkMethod(const std::string& request);
 	bool checkTargetAndVersion(const std::string& request);
 	bool validChar(const std::string& method);
+	const std::string& getMethod() const;
+	const std::string& getTarget() const;
+	const std::string& getVersion() const;
+	const std::map<std::string, std::string>& getHeaders() const;
 	// Headers
 	bool headers(const std::string& request);
 	void ftTrim(std::string& value);

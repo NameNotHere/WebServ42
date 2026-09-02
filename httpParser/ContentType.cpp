@@ -1,5 +1,7 @@
 #include "HttpParser.hpp"
 
+// Still need to accept "" on the media params
+
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");

@@ -13,6 +13,26 @@ void HttpParser::parseHttpRequest(const std::string& request)
 		std::cout << "Valid Header\n";
 }
 
+const std::string& HttpParser::getMethod() const
+{
+	return _method;
+}
+
+const std::string& HttpParser::getTarget() const
+{
+	return _target;
+}
+
+const std::string& HttpParser::getVersion() const
+{
+	return _version;
+}
+
+const std::map<std::string, std::string>& HttpParser::getHeaders() const
+{
+    return _headers;
+}
+
 HttpParser::HttpParser(){}
 
 HttpParser::HttpParser(const HttpParser& other)
