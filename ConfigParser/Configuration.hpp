@@ -58,7 +58,7 @@ struct ServerConfig
 };
 
 std::vector<Token>	lex(const std::string& text);
-
+void parse(std::vector<ServerConfig> &servers, const std::vector<Token>& tokens);
 void				expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type);
 
 #endif

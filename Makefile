@@ -14,6 +14,7 @@ SRCSHTTP	= httpParser/HttpParser.cpp \
 
 SRCCONFIG =   ConfigParser/ConfigParser.cpp \
 			  ConfigParser/ConfigLex.cpp \
+			  main.cpp
 			  	
 OBJS 		= $(SRCCONFIG:%.cpp=$(OBJ_DIR)/%.o)
 
