@@ -3,6 +3,7 @@
 bool HttpParser::headers(const std::string& request)
 {
 	size_t posStart = request.find("\r\n");
+
 	if(posStart == std::string::npos)
 		return false;
 

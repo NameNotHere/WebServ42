@@ -61,6 +61,7 @@ bool HttpParser::checkContentLength(const std::string& value)
 {
 	if(value.empty())
 		return false;
+
 	for(size_t i = 0; i < value.size(); i++)
 	{
 		if(!isdigit(value[i]))
@@ -73,6 +74,9 @@ bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
 
+	if(value[value.size() - 1] == ';')
+		return false;
+
 	if(semi != std::string::npos)
 	{
 		std::string mediaType = value.substr(0, semi);
@@ -84,10 +88,14 @@ bool HttpParser::checkContentType(const std::string& value)
 		std::string paramList = value.substr(semi + 1);
 		ftTrim(paramList);
 		std::cout << "ParamList:" << paramList << "\n";
+		if(paramList.empty())
+			return false;
+
 		while(!paramList.empty())
 		{
 			size_t nextSemi = paramList.find(";");
 			std::string param;
+
 			if(nextSemi == std::string::npos)
 			{
 				param = paramList;
@@ -143,6 +151,8 @@ bool HttpParser::checkMediaParam(const std::string& param)
 
 	if(equals == std::string::npos)
 		return false;
+	if (equals == 0 || equals == param.size() - 1)
+    	return false;
 
 	std::string name = param.substr(0, equals);
 	std::cout << "ParamName:" << name << "\n";
@@ -161,6 +171,7 @@ bool HttpParser::checkTransferEncoding(const std::string& value)
 	lowerCase(chunked);
 	if(chunked != "chunked")
 		return false;
+
 	return true;
 }
 
