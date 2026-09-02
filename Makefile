@@ -5,10 +5,6 @@ CXXFLAGS	= -Wall -Wextra -Werror -std=c++11
 
 OBJ_DIR		= obj
 
-<<<<<<< HEAD
-SRCS		= ConfigParser/ConfigParser.cpp
-OBJS		= $(SRCS:$(SRCS)/%.cpp=$(OBJ_DIR)/%.o)
-=======
 SRCS		= httpParser/HttpParser.cpp \
 			  httpParser/HttpTester.cpp \
 			  httpParser/RequestLine.cpp \
@@ -18,7 +14,6 @@ SRCS		= httpParser/HttpParser.cpp \
 			  #ConfigParser.cpp \
 			  	
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
->>>>>>> origin/jack
 
 RM			= rm -rf
 

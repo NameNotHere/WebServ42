@@ -50,17 +50,17 @@ bool HttpParser::checkValue(const std::string& name, const std::string& value)
 {
     if (name == "host")
         return checkHost(value);
-    if (name == "content-length")
+    else if (name == "content-length")
         return checkContentLength(value);
-    if (name == "transfer-encoding")
+    else if (name == "transfer-encoding")
         return checkTransferEncoding(value);
-    if (name == "content-type")
+    else if (name == "content-type")
         return checkContentType(value);
-    if (name == "connection")
+    else if (name == "connection")
         return checkConnection(value);
-    if (name == "expect")
+    else if (name == "expect")
         return checkExpect(value);
-    if (name == "user-agent")
+    else if (name == "user-agent")
         return checkUserAgent(value);
 
     return true;
