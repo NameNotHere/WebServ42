@@ -1,11 +1,9 @@
 #include "HttpParser.hpp"
 
-// Still need to accept "" on the media params
-
-
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
+	std::cout << "VALUE:" << value << "\n";
 
 	if(value[value.size() - 1] == ';')
 		return false;
@@ -24,10 +22,38 @@ bool HttpParser::checkContentType(const std::string& value)
 		std::cout << "ParamList:" << paramList << "\n";
 		if(paramList.empty())
 			return false;
-
+	
 		while(!paramList.empty())
 		{
-			size_t nextSemi = paramList.find(";");
+			size_t nextSemi = std::string::npos;
+			bool inQuotes = false;
+			bool escaped = false;
+			//Need to check for spaces in unquoted values
+			for(size_t i = 0; i < paramList.size(); i++)
+			{
+				if(escaped == true)
+				{
+					escaped = false;
+					continue;
+				}
+				if(paramList[i] == '\\' && inQuotes == true)
+				{
+					escaped = true;
+					continue;
+				}
+				if(paramList[i] == '"')
+				{
+					inQuotes = !inQuotes;
+				}
+				if(paramList[i] == ';' && inQuotes == false)
+				{
+					nextSemi = i;
+					break;
+				}
+			}
+			if(inQuotes == true || escaped == true)
+				return false;
+
 			std::string param;
 
 			if(nextSemi == std::string::npos)
@@ -93,33 +119,11 @@ bool HttpParser::checkMediaParam(const std::string& param)
 	std::string value = param.substr(equals + 1);
 	std::cout << "ParamValue:" << value << "\n";
 
-	if(!validChar(name) || !validCharParam(value))
+	// if(!validChar(name) || !validCharParam(value))
+	// 	return false;
+	// Think i got it, check for '"' in value and if not found,
+	// just use validChar, if found, i think everything allowed but must check
+	if(!validChar(name))
 		return false;
-	return true;
-}
-
-bool HttpParser::validCharParam(const std::string& value)
-{
-	size_t quoteFlag = 0;
-
-	for(size_t i = 0; i < value.size(); i++)
-	{
-		if(!isalnum(value[i]) && value[i] != '-' && value[i] != '!' && value[i] != '#'
-		   && value[i] != '$' && value[i] != '%' && value[i] != '&' && value[i] != '\''
-		   && value[i] != '*' && value[i] != '+' && value[i] != '.' && value[i] != '^'
-		   && value[i] != '_' && value[i] != '`' && value[i] != '|' && value[i] != '~')
-		{
-			if((value[i] == '\"' && i == 0) || (value[i] == '\"' && i == value.size() - 1))
-			{
-				quoteFlag++;
-				continue;
-			}
-			return false;
-		}
-	}
-
-	if(quoteFlag != 0 && quoteFlag != 2)
-		return false;
-
 	return true;
 }
