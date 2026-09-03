@@ -24,14 +24,8 @@ int main(int argc, char** argv)
 
     buffer << file.rdbuf();
     config = buffer.str();
-    
-    std::cout << "-------------------LEX AND TOK-----------\n";
-    std::vector<Token> lexxer = lex(config);
-    for (long unsigned int i = 0; i < lexxer.size(); i++)
-        std::cout << lexxer[i].type  << "  " << lexxer[i].word << "\n";
-    //parse
     std::vector<ServerConfig> servers;
-    parse(servers, lexxer);
+    parse(servers, lex(config));
 
     return 0;
 }
