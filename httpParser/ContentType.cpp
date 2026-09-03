@@ -1,5 +1,7 @@
 #include "HttpParser.hpp"
 
+// test case: boundary=\"abc\"1\"23\";
+
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
@@ -119,11 +121,29 @@ bool HttpParser::checkMediaParam(const std::string& param)
 	std::string value = param.substr(equals + 1);
 	std::cout << "ParamValue:" << value << "\n";
 
-	// if(!validChar(name) || !validCharParam(value))
-	// 	return false;
-	// Think i got it, check for '"' in value and if not found,
-	// just use validChar, if found, i think everything allowed but must check
 	if(!validChar(name))
 		return false;
+	
+	size_t quote = value.find('"');
+	if(quote == std::string::npos)
+	{
+		if(!validChar(value))
+			return false;
+	}
+	else
+	{
+		if(quote != 0)
+			return false;
+
+		size_t closingQuote = value.find('"', quote + 1);
+		if(closingQuote == std::string::npos)
+			return false;
+
+		for(size_t i = closingQuote + 1; i < value.size(); i++)
+		{
+			if(value[i] != ' ' && value[i] != '\t')
+				return false;
+		}
+	}
 	return true;
 }
