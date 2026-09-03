@@ -37,9 +37,7 @@ void parse_location_directive(const std::vector<Token> &tokens, size_t &pos, Loc
     }
 }
 
-LocationConfig parse_location(
-    const std::vector<Token>& tokens,
-    size_t& pos)
+LocationConfig parse_location( const std::vector<Token>& tokens, size_t& pos)
 {
     LocationConfig location;
 
@@ -59,7 +57,8 @@ ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
 
     expect_and_increase(tokens, pos, WORD);
     expect_and_increase(tokens, pos, LEFTBRACE);
-    while (tokens[pos].type != RIGHTBRACE && pos <= tokens.size())    {
+    while (tokens[pos].type != RIGHTBRACE && pos < tokens.size())
+    {
         if (tokens[pos].word == "location")
         {
             LocationConfig location = parse_location(tokens, pos);

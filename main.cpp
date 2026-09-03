@@ -1,6 +1,11 @@
 #include "ConfigParser/Configuration.hpp"
 #include <iostream>
 
+//void Init(const ServerConfig& serv)
+//{
+//
+//}
+
 int main(int argc, char** argv)
 {
 	ServerConfig con;
@@ -27,5 +32,7 @@ int main(int argc, char** argv)
     std::vector<ServerConfig> servers;
     parse(servers, lex(config));
 
+    //for (size_t i = 0; i <servers.size(); i++)
+        //Init(servers[i]);
     return 0;
 }
