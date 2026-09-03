@@ -6,6 +6,33 @@
 //
 //}
 
+void print_config(const std::vector<ServerConfig>& servers)
+{
+    for (const ServerConfig& server : servers)
+    {
+        std::cout << "Server\n";
+        std::cout << "  name: " << server.name << '\n';
+        std::cout << "  listen: " << server.listen << '\n';
+        std::cout << "  root: " << server.root << '\n';
+
+        std::cout << "  allowed methods:";
+        for (const std::string& method : server.allowed_methods)
+            std::cout << ' ' << method;
+        std::cout << '\n';
+
+        for (const LocationConfig& location : server.locations)
+        {
+            std::cout << "  Location: " << location.path << '\n';
+            std::cout << "    root: " << location.root << '\n';
+
+            std::cout << "    allowed methods:";
+            for (const std::string& method : location.allowed_methods)
+                std::cout << ' ' << method;
+            std::cout << '\n';
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
 	ServerConfig con;
@@ -32,7 +59,6 @@ int main(int argc, char** argv)
     std::vector<ServerConfig> servers;
     parse(servers, lex(config));
 
-    //for (size_t i = 0; i <servers.size(); i++)
-        //Init(servers[i]);
+    print_config(servers);
     return 0;
 }
