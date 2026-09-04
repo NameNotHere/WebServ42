@@ -135,15 +135,33 @@ bool HttpParser::checkMediaParam(const std::string& param)
 		if(quote != 0)
 			return false;
 
-		size_t closingQuote = value.find('"', quote + 1);
-		if(closingQuote == std::string::npos)
-			return false;
+		bool inQuotes = false;
+		bool escaped = false;
 
-		for(size_t i = closingQuote + 1; i < value.size(); i++)
+		for(size_t i = 0; i < value.size(); i++)
 		{
-			if(value[i] != ' ' && value[i] != '\t')
+			if(escaped)
+			{
+				escaped = false;
+				continue;
+			}
+
+			if(value[i] == '\\' && inQuotes)
+			{
+				escaped = true;
+				continue;
+			}
+
+			if(value[i] == '"')
+			{
+				inQuotes = !inQuotes;
+				continue;
+			}
+			if(!inQuotes && value[i] != ' ' && value[i] != '\t')
 				return false;
 		}
+		if(inQuotes || escaped)
+			return false;
 	}
 	return true;
 }
