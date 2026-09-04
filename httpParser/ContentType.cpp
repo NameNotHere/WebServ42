@@ -1,7 +1,5 @@
 #include "HttpParser.hpp"
 
-// test case: boundary=\"abc\"1\"23\";
-
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
@@ -121,10 +119,16 @@ bool HttpParser::checkMediaParam(const std::string& param)
 	std::string value = param.substr(equals + 1);
 	std::cout << "ParamValue:" << value << "\n";
 
-	if(!validChar(name))
+	if(!validChar(name) || !validValue(value))
 		return false;
-	
+
+	return true;
+}
+
+bool HttpParser::validValue(const std::string& value)
+{
 	size_t quote = value.find('"');
+
 	if(quote == std::string::npos)
 	{
 		if(!validChar(value))
@@ -145,13 +149,11 @@ bool HttpParser::checkMediaParam(const std::string& param)
 				escaped = false;
 				continue;
 			}
-
 			if(value[i] == '\\' && inQuotes)
 			{
 				escaped = true;
 				continue;
 			}
-
 			if(value[i] == '"')
 			{
 				inQuotes = !inQuotes;
