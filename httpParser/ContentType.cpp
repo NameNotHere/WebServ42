@@ -3,7 +3,6 @@
 bool HttpParser::checkContentType(const std::string& value)
 {
 	size_t semi = value.find(";");
-	std::cout << "VALUE:" << value << "\n";
 
 	if(value[value.size() - 1] == ';')
 		return false;
@@ -11,15 +10,13 @@ bool HttpParser::checkContentType(const std::string& value)
 	if(semi != std::string::npos)
 	{
 		std::string mediaType = value.substr(0, semi);
-
+		ftTrim(mediaType);
 		if(!checkMediaType(mediaType))
 			return false;
-		std::cout << "Media type:" << mediaType << "\n";
 		
 		std::string paramList = value.substr(semi + 1);
 		ftTrim(paramList);
 
-		std::cout << "ParamList:" << paramList << "\n";
 		if(paramList.empty())
 			return false;
 	
@@ -28,7 +25,7 @@ bool HttpParser::checkContentType(const std::string& value)
 			size_t nextSemi = std::string::npos;
 			bool inQuotes = false;
 			bool escaped = false;
-			//Need to check for spaces in unquoted values
+
 			for(size_t i = 0; i < paramList.size(); i++)
 			{
 				if(escaped == true)
@@ -69,13 +66,11 @@ bool HttpParser::checkContentType(const std::string& value)
 			}
 			if(!checkMediaParam(param))
 				return false;
-			std::cout << "Param:" << param << "\n";
 		}
 	}
 	else
 	{
 		std::string mediaType = value.substr(0, semi);
-		std::cout << "Media type:" << mediaType << "\n";
 
 		if(!checkMediaType(mediaType))
 			return false;
@@ -95,7 +90,7 @@ bool HttpParser::checkMediaType(const std::string& mediaType)
 
 	if(mediaType.find("/", slash + 1) != std::string::npos)
 		return false;
-	
+
 	std::string rawType = mediaType.substr(0, slash);
 	std::string subType = mediaType.substr(slash + 1);
 
@@ -115,9 +110,7 @@ bool HttpParser::checkMediaParam(const std::string& param)
     	return false;
 
 	std::string name = param.substr(0, equals);
-	std::cout << "ParamName:" << name << "\n";
 	std::string value = param.substr(equals + 1);
-	std::cout << "ParamValue:" << value << "\n";
 
 	if(!validChar(name) || !validValue(value))
 		return false;

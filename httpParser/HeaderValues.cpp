@@ -15,7 +15,6 @@ bool HttpParser::checkHost(const std::string& value)
 		return false;
 
 	std::string hostname = value.substr(0, colon);
-	std::cout << "Hostname:" << hostname << "\n";
 
 	for(size_t i = 0; i < hostname.size(); i++)
 	{
@@ -27,7 +26,6 @@ bool HttpParser::checkHost(const std::string& value)
 	if(port.empty())
 		return false;
 
-	std::cout << "Port:" << port << "\n";
 	for(size_t i = 0; i < port.size(); i++)
 	{
 		if(!isdigit(port[i]))
