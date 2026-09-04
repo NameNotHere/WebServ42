@@ -3,14 +3,27 @@
 void HttpParser::parseHttpRequest(const std::string& request)
 {
 	if(!requestLine(request))
+	{
 		std::cout << "Invalid HTTP Request!\n";
+		exit(1);
+	}
 	else
 		std::cout << "Valid HTTP Request!\n";
 
 	if(!headers(request))
+	{
 		std::cout << "Invalid Header\n";
+		exit(1);
+	}
 	else
 		std::cout << "Valid Header\n";
+	if(!body(request))
+	{
+		std::cout << "Invalid Body\n";
+		exit(1);
+	}
+	else
+		std::cout << "Valid Body\n";
 }
 
 const std::string& HttpParser::getMethod() const

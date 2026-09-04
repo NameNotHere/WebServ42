@@ -66,6 +66,16 @@ bool HttpParser::checkContentLength(const std::string& value)
 		if(!isdigit(value[i]))
 			return false;
 	}
+
+	try
+	{
+		unsigned long contentLength = stoul(value);
+		std::cout << "ContentLength:" << contentLength << "\n";
+	}
+	catch(const std::exception& e)
+	{
+		return false;
+	}	
 	return true;
 }
 

@@ -1,5 +1,20 @@
 #include "HttpParser.hpp"
 
+bool HttpParser::validChar(const std::string& method)
+{
+	for(size_t i = 0; i < method.size(); i++)
+	{
+		if(!isalnum(method[i]) && method[i] != '-' && method[i] != '!' && method[i] != '#'
+		   && method[i] != '$' && method[i] != '%' && method[i] != '&' && method[i] != '\''
+		   && method[i] != '*' && method[i] != '+' && method[i] != '.' && method[i] != '^'
+		   && method[i] != '_' && method[i] != '`' && method[i] != '|' && method[i] != '~')
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void HttpParser::ftTrim(std::string& value)
 {
 	size_t start = value.find_first_not_of(" \t");

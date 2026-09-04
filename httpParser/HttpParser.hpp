@@ -44,8 +44,9 @@ public:
 	bool checkFieldValue(const std::string& value);
 	bool checkMediaType(const std::string& mediaType);
 	bool checkMediaParam(const std::string& param);
-	bool quoteCheck(const std::string& str);
 	bool validValue(const std::string& value);
+	// Body
+	bool body(const std::string& request);
 };
 
 #endif

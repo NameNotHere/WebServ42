@@ -51,18 +51,3 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 	
 	return true;
 }
-
-bool HttpParser::validChar(const std::string& method)
-{
-	for(size_t i = 0; i < method.size(); i++)
-	{
-		if(!isalnum(method[i]) && method[i] != '-' && method[i] != '!' && method[i] != '#'
-		   && method[i] != '$' && method[i] != '%' && method[i] != '&' && method[i] != '\''
-		   && method[i] != '*' && method[i] != '+' && method[i] != '.' && method[i] != '^'
-		   && method[i] != '_' && method[i] != '`' && method[i] != '|' && method[i] != '~')
-		{
-			return false;
-		}
-	}
-	return true;
-}
