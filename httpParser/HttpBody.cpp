@@ -1,10 +1,11 @@
 #include "HttpParser.hpp"
 
-// Need to check for extra \r\n hanging around
-
 bool HttpParser::body(const std::string& request)
 {
 	size_t start = request.find("\r\n\r\n");
+	if(start == std::string::npos)
+   		return false;
+
 	std::string body = request.substr(start + 4);
 	std::cout << "Body:" << body << "\n";
 
@@ -12,12 +13,16 @@ bool HttpParser::body(const std::string& request)
 	it = _headers.find("content-length");
 
 	bool hasContentLength = _headers.find("content-length") != _headers.end();
-	bool hasTansferEncoding = _headers.find("transfer-encoding") != _headers.end();
+	bool hasTransferEncoding = _headers.find("transfer-encoding") != _headers.end();
 
-	if(!hasContentLength && !hasTansferEncoding && !body.empty())
+	if(!hasContentLength && !hasTransferEncoding && !body.empty())
 		return false;
 
-	if(it != _headers.end())
+	if(hasTransferEncoding) // Takes precendence of both Transfer encoding and content length are present
+	{
+		// Handle Transfer Encoding chunked
+	}
+	else if(hasContentLength)
 	{
 		// Checked if this fails already in the program
 		unsigned long contentLength = stoul(it->second);
@@ -31,14 +36,19 @@ bool HttpParser::body(const std::string& request)
 		}
 		if(contentLength < body.size())
 		{
-			// Send error 404 or sumshit
+			// Send error 400 or sumshit
 			std::cout << "Body too Large\n";
 			return false;
 		}
 		if(contentLength > body.size())
 		{
 			// Have to wait and see if more data will come 
-			std::cout << "Body too small\n";
+			// Will have to implement recieve() to keep
+			// checking if there is more data
+			// If body.size() is finished and != to content length
+			// Return error
+			std::cout << "Body incomplete\n";
+			return true; // Temporarily
 		}
 	}
 	return true;
