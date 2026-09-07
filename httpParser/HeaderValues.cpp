@@ -70,7 +70,7 @@ bool HttpParser::checkContentLength(const std::string& value)
 	try
 	{
 		unsigned long contentLength = stoul(value);
-		std::cout << "ContentLength:" << contentLength << "\n";
+		(void) contentLength;
 	}
 	catch(const std::exception& e)
 	{
