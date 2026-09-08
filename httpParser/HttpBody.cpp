@@ -58,14 +58,15 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 bool HttpParser::transferEncoding(const std::string& bodyValue)
 {
 	std::string body = bodyValue;
+	size_t digit = 0;
 	// std::cout << "Body:" << body << "\n";
 
 	for(size_t i = 0; i < body.size(); i++)
 	{
 		if(body[i] == '\r' && body[i + 1] == '\n' && body[i + 2] == '\r' && body[i + 3] == '\n')
 			break;
-		size_t bytesPos = body.find("\r\n");
 
+		size_t bytesPos = body.find("\r\n");
 		if(bytesPos == std::string::npos)
 			return false;
 
@@ -75,13 +76,32 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 		body = body.substr(bytesPos + 2);
 
 		size_t valuePos = body.find("\r\n");
-		if(bytesPos == std::string::npos)
+		if(valuePos == std::string::npos)
 			return false;
 
-		// std::cout << "NewBody:" << body << "\n";
 		std::string value = body.substr(0, valuePos);
 		std::cout << "Value:" << value << "\n";
+		if(!convertBytes(bytes, digit, value))
+			return false;
+
 		body = body.substr(valuePos + 2);
 	}
+	return true;
+}
+
+bool HttpParser::convertBytes(std::string& bytes, size_t& digit, const std::string& value)
+{
+	try
+	{
+		digit = stoi(bytes);
+		std::cout << "Digit:" << digit << "\n";
+	}
+	catch(const std::exception& e)
+	{
+		return false;
+	}
+	std::cout << "ValueSize:" << value.size() << "\n";
+	if(digit != value.size())
+		return false;
 	return true;
 }
