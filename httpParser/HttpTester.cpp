@@ -5,9 +5,8 @@ int main(void)
 	HttpParser test;
 
 	// test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080 \r\nContent-length: 5  \r\n\r\nherro");
-	// test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080  \r\nConnection:    kEeP-alive \r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)  \r\nContent-length:  42   \r\nTrAnsFer-encoDing:  chunked  \r\nConTeNt-tYpe:             text/html ; charset=\"utf-\t8\";	 boundary=\"abc\\\"1\\\"23\"; charset=utf-10           \r\nExpect:     100-continue    \r\n\r\ntesting body");
-	test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080\r\nContent-length: 42\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\nworlds\r\n0\r\n\r\n");
-
+	test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080  \r\nConnection:    kEeP-alive \r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)  \r\nContent-length:  42   \r\nConTeNt-tYpe:             text/html ; charset=\"utf-\t8\";	 boundary=\"abc\\\"1\\\"23\"; charset=utf-10           \r\nExpect:     100-continue    \r\nTransfer-Encoding: chunked\r\n\r\n7\r\nTesting\r\n4\r\nbody\r\n5\r\nfinal\r\n0\r\n\r\n");
+	// test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080\r\nContent-length: 42\r\nTransfer-Encoding: chunked\r\n\r\n7\r\nTesting\r\n4\r\nbody\r\n5\r\nfinal\r\n0\r\n\r\n");
 	// std::cout << "\n-----Additional tests------\n";
 	// std::cout << "Method:" << test.getMethod() << "\n";
 	// std::cout << "Target:" << test.getTarget() << "\n";

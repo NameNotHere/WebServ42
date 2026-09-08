@@ -59,11 +59,11 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 {
 	std::string body = bodyValue;
 	size_t digit = 0;
-	// std::cout << "Body:" << body << "\n";
 
 	for(size_t i = 0; i < body.size(); i++)
 	{
-		if(body[i] == '\r' && body[i + 1] == '\n' && body[i + 2] == '\r' && body[i + 3] == '\n')
+		if(body[i] == '\r' && body[i + 1] == '\n' 
+		  && body[i + 2] == '\r' && body[i + 3] == '\n')
 			break;
 
 		size_t bytesPos = body.find("\r\n");
