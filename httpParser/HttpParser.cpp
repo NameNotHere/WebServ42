@@ -17,13 +17,29 @@ void HttpParser::parseHttpRequest(const std::string& request)
 	}
 	else
 		std::cout << "Valid Header\n";
-	if(!body(request))
+	
+	BodyStatus status = body(request);
+
+	if(status == BODY_VALID)
+	{
+		std::cout << "Valid Body\n";
+	}
+	else if(status == BODY_INVALID)
 	{
 		std::cout << "Invalid Body\n";
-		exit(1);
 	}
-	else
-		std::cout << "Valid Body\n";
+	else if(status == BODY_INCOMPLETE)
+	{
+		std::cout << "Incomplete Body\n";
+	}
+
+	// if(!body(request))
+	// {
+	// 	std::cout << "Invalid Body\n";
+	// 	exit(1);
+	// }
+	// else
+	// 	std::cout << "Valid Body\n";
 }
 
 const std::string& HttpParser::getMethod() const

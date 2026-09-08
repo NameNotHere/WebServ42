@@ -16,6 +16,13 @@ private:
 	std::map<std::string, std::string> _headers;
 
 public:
+	enum BodyStatus
+	{
+		BODY_VALID,
+		BODY_INVALID,
+		BODY_INCOMPLETE
+	};
+
 	HttpParser();
 	HttpParser(const HttpParser& other);
 	HttpParser& operator=(const HttpParser& other);
@@ -49,7 +56,7 @@ public:
 	bool checkMediaParam(const std::string& param);
 	bool validValue(const std::string& value);
 	// Body
-	bool body(const std::string& request);
+	BodyStatus body(const std::string& request);
 };
 
 #endif

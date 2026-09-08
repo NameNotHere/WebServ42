@@ -1,10 +1,10 @@
 #include "HttpParser.hpp"
 
-bool HttpParser::body(const std::string& request)
+HttpParser::BodyStatus HttpParser::body(const std::string& request)
 {
 	size_t start = request.find("\r\n\r\n");
 	if(start == std::string::npos)
-   		return false;
+   		return BODY_INVALID;
 
 	std::string body = request.substr(start + 4);
 	std::cout << "Body:" << body << "\n";
@@ -16,7 +16,7 @@ bool HttpParser::body(const std::string& request)
 	bool hasTransferEncoding = _headers.find("transfer-encoding") != _headers.end();
 
 	if(!hasContentLength && !hasTransferEncoding && !body.empty())
-		return false;
+		return BODY_INVALID;
 
 	if(hasTransferEncoding) // Takes precendence of both Transfer encoding and content length are present
 	{
@@ -32,13 +32,13 @@ bool HttpParser::body(const std::string& request)
 		{
 			// Body complete
 			std::cout << "Body just right\n";
-			return true;
+			return BODY_VALID;
 		}
 		if(contentLength < body.size())
 		{
 			// Send error 400 or sumshit
 			std::cout << "Body too Large\n";
-			return false;
+			return BODY_INVALID;
 		}
 		if(contentLength > body.size())
 		{
@@ -47,9 +47,8 @@ bool HttpParser::body(const std::string& request)
 			// checking if there is more data
 			// If body.size() is finished and != to content length
 			// Return error
-			std::cout << "Body incomplete\n";
-			return true; // Temporarily
+			return BODY_INCOMPLETE;
 		}
 	}
-	return true;
+	return BODY_VALID;
 }
