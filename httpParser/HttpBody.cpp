@@ -59,8 +59,9 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 {
 	std::string body = bodyValue;
 	size_t digit = 0;
+	size_t i = 0;
 
-	for(size_t i = 0; i < body.size(); i++)
+	for(i = 0; i < body.size(); i++)
 	{
 		if(body[i] == '\r' && body[i + 1] == '\n' 
 		  && body[i + 2] == '\r' && body[i + 3] == '\n')
@@ -86,6 +87,10 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 
 		body = body.substr(valuePos + 2);
 	}
+	if(body[i] != '\n' && body[i - 1] != '\r' 
+	  && body[i - 2] != '\n' && body[i - 3] != '\r')
+		return false;
+
 	return true;
 }
 
