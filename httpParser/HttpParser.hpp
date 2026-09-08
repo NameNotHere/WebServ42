@@ -57,6 +57,7 @@ public:
 	bool validValue(const std::string& value);
 	// Body
 	BodyStatus body(const std::string& request);
+	bool transferEncoding(const std::string& bodyValue);
 };
 
 #endif

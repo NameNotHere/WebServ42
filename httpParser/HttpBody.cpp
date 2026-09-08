@@ -7,7 +7,6 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
    		return BODY_INVALID;
 
 	std::string body = request.substr(start + 4);
-	std::cout << "Body:" << body << "\n";
 
 	std::map<std::string, std::string>::const_iterator it;
 	it = _headers.find("content-length");
@@ -20,6 +19,9 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 	if(hasTransferEncoding) // Takes precendence of both Transfer encoding and content length are present
 	{
+		std::cout << "Handling Tranfer-Encoding\n";
+		if(!transferEncoding(body))
+			return BODY_INVALID;
 		// Handle Transfer Encoding chunked
 	}
 	else if(hasContentLength)
@@ -51,4 +53,35 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 		}
 	}
 	return BODY_VALID;
+}
+
+bool HttpParser::transferEncoding(const std::string& bodyValue)
+{
+	std::string body = bodyValue;
+	// std::cout << "Body:" << body << "\n";
+
+	for(size_t i = 0; i < body.size(); i++)
+	{
+		if(body[i] == '\r' && body[i + 1] == '\n' && body[i + 2] == '\r' && body[i + 3] == '\n')
+			break;
+		size_t bytesPos = body.find("\r\n");
+
+		if(bytesPos == std::string::npos)
+			return false;
+
+		std::string bytes = body.substr(0, bytesPos);
+		std::cout << "Bytes:" << bytes << "\n";
+
+		body = body.substr(bytesPos + 2);
+
+		size_t valuePos = body.find("\r\n");
+		if(bytesPos == std::string::npos)
+			return false;
+
+		// std::cout << "NewBody:" << body << "\n";
+		std::string value = body.substr(0, valuePos);
+		std::cout << "Value:" << value << "\n";
+		body = body.substr(valuePos + 2);
+	}
+	return true;
 }
