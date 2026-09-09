@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 
 void Init(Server& server)
@@ -68,6 +69,107 @@ void print_config(const std::vector<ServerConfig>& servers)
             for (const std::string& method : location.allowed_methods)
                 std::cout << ' ' << method;
             std::cout << '\n';
+        }
+    }
+}
+
+// Create pollfd entries for all listening sockets
+std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
+{
+    std::vector<pollfd> fds;
+    fds.reserve(hosting.size());
+    for (size_t i = 0; i < hosting.size(); ++i)
+    {
+        pollfd p;
+        p.fd = hosting[i].serverFD;
+        p.events = POLLIN;
+        p.revents = 0;
+        fds.push_back(p);
+    }
+
+    return fds;
+}
+
+void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds)
+{
+    sockaddr_in clientAddr;
+    pollfd client;
+    char ip[INET_ADDRSTRLEN];
+
+    socklen_t addrlen = sizeof(clientAddr);
+    int clientFD = accept(serverFD, reinterpret_cast<sockaddr*>(&clientAddr), &addrlen);
+    if (clientFD == -1)
+    {
+        std::cerr << "accept() failed\n";
+        return;
+    }
+
+    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
+    {
+        std::cerr << "inet_ntop() failed\n";
+        close(clientFD);
+        return;
+    }
+    client.fd = clientFD;
+    client.events = POLLIN;
+    client.revents = 0;
+    fds.push_back(client);
+    std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
+}
+
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs)
+{
+    while (true)
+    {
+        int ready = poll(fds.data(), fds.size(), -1);
+        if (ready == -1)
+        {
+            std::cerr << "poll() failed\n";
+            break;
+        }
+
+        for (size_t i = 0; i < fds.size(); ++i)
+        {
+            if (!(fds[i].revents & POLLIN))
+                continue;
+
+            // Check whether this FD is one of our listening sockets
+            bool isListeningSocket = false;
+            size_t serverIndex = 0;
+
+            for (size_t j = 0; j < hosting.size(); ++j)
+            {
+                if (fds[i].fd == hosting[j].serverFD)
+                {
+                    isListeningSocket = true;
+                    serverIndex = j;
+                    break;
+                }
+            }
+
+            if (isListeningSocket)
+                handleNewConnection(fds[i].fd, hosting[serverIndex].conf, fds);
+            else
+            {
+                // This is a client socket.
+                // For now, just demonstrate that data is available.
+                char buffer[4096];
+                ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
+
+                if (bytesRead <= 0)
+                {
+                    if (bytesRead == 0)
+                        std::cout << "Client disconnected\n";
+                    else
+                        std::cerr << "recv() failed\n";
+                    close(fds[i].fd);
+                    fds.erase(fds.begin() + i);
+                    i--;
+                    continue;
+                }
+                reqs[fds[i].fd].append(buffer, bytesRead);
+                std::cout << "Received from client:\n" << buffer << std::endl;
+            }
         }
     }
 }

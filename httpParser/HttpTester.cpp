@@ -12,12 +12,12 @@
 // 	std::cout << "Version:" << test.getVersion() << "\n";
 
 // 	std::cout << "\n----Printing Headers----\n\n";
-// 	for (std::map<std::string, std::string>::const_iterator it = test.getHeaders().begin();
-// 	     it != test.getHeaders().end(); ++it)
-// 	{
-// 	     std::cout << "Name:" << it->first << "\n";
-// 	     std::cout << "Value:" << it->second << "\n\n";
-// 	}
+	// for (std::map<std::string, std::string>::const_iterator it = test.getHeaders().begin();
+	//      it != test.getHeaders().end(); ++it)
+	// {
+	//      std::cout << "Name:" << it->first << "\n";
+	//      std::cout << "Value:" << it->second << "\n\n";
+	// }
 // 	return 0;
 // }
 
