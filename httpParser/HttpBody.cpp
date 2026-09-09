@@ -17,12 +17,11 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 	if(!hasContentLength && !hasTransferEncoding && !body.empty())
 		return BODY_INVALID;
 
-	if(hasTransferEncoding) // Takes precendence of both Transfer encoding and content length are present
+	if(hasTransferEncoding) // Takes precendence if both Transfer encoding and content length are present
 	{
-		std::cout << "Handling Tranfer-Encoding\n";
+		// std::cout << "Handling Tranfer-Encoding\n";
 		if(!transferEncoding(body))
 			return BODY_INVALID;
-		// Handle Transfer Encoding chunked
 	}
 	else if(hasContentLength)
 	{
@@ -72,7 +71,7 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 			return false;
 
 		std::string bytes = body.substr(0, bytesPos);
-		std::cout << "Bytes:" << bytes << "\n";
+		// std::cout << "Bytes:" << bytes << "\n";
 
 		body = body.substr(bytesPos + 2);
 
@@ -81,10 +80,11 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 			return false;
 
 		std::string value = body.substr(0, valuePos);
-		std::cout << "Value:" << value << "\n";
+		// std::cout << "Value:" << value << "\n";
 		if(!convertBytes(bytes, digit, value))
 			return false;
-
+		if(digit == 0)
+			break;
 		body = body.substr(valuePos + 2);
 	}
 	if(body[i] != '\n' && body[i - 1] != '\r' 
@@ -99,13 +99,13 @@ bool HttpParser::convertBytes(std::string& bytes, size_t& digit, const std::stri
 	try
 	{
 		digit = stoi(bytes);
-		std::cout << "Digit:" << digit << "\n";
+		// std::cout << "Digit:" << digit << "\n";
 	}
 	catch(const std::exception& e)
 	{
 		return false;
 	}
-	std::cout << "ValueSize:" << value.size() << "\n";
+	// std::cout << "ValueSize:" << value.size() << "\n";
 	if(digit != value.size())
 		return false;
 	return true;
