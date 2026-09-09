@@ -1,6 +1,5 @@
 #include "ServerHandler/Server.hpp"
 #include "ConfigParser/Configuration.hpp"
-#include "httpParser/HttpParser.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -11,6 +10,7 @@
 #include <unistd.h>
 #include <cstring>
 
+// Create pollfd entries for all listening sockets
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
 {
     std::vector<pollfd> fds;
@@ -27,6 +27,7 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
     return fds;
 }
 
+// Accept a new client from a listening socket
 void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds)
 {
     sockaddr_in clientAddr;
@@ -54,10 +55,10 @@ void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<
     std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds)
+
+// Main event loop
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> reqs)
 {
-    static std::string req = "\0";
-    
     while (true)
     {
         int ready = poll(fds.data(), fds.size(), -1);
@@ -90,31 +91,31 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds)
                 handleNewConnection(fds[i].fd, hosting[serverIndex].conf, fds);
             else
             {
+                // This is a client socket.
+                // For now, just demonstrate that data is available.
                 char buffer[4096];
-                HttpParser test;
                 ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
 
                 if (bytesRead <= 0)
                 {
                     if (bytesRead == 0)
-                    {
-                        req.append("\0");
-                        test.parseHttpRequest("req");
                         std::cout << "Client disconnected\n";
-                    }
                     else
                         std::cerr << "recv() failed\n";
                     close(fds[i].fd);
+
+                    // Remove this client from poll()
                     fds.erase(fds.begin() + i);
-                    i--;
+                    --i;
                     continue;
                 }
-                req.append(buffer);
+                reqs[fds[i].fd].append(buffer, bytesRead);
                 std::cout << "Received from client:\n" << buffer << std::endl;
             }
         }
     }
 }
+
 
 int main(int argc, char** argv)
 {
