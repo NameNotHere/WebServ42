@@ -1,26 +1,43 @@
 #include "Configuration.hpp"
 #include <iostream>
+#include <cstdlib>
+#include <string>
+#include <fstream>
+#include <vector>
 
 void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, ServerConfig& server)
 {
-    std::string value;
+    int code;
     std::string keyword = tokens[pos].word;
+    
     pos++;
-        // more values here too
-    expect_and_increase(tokens, pos, WORD);
-    value = tokens[pos - 1].word;
-    expect_and_increase(tokens, pos, SEMICOLON);
-
     if (keyword == "listen")
-        server.listen = std::stoi(value);
+    {
+        expect_and_increase(tokens, pos, WORD);
+        server.listen = static_cast<unsigned int>(std::stoi(tokens[pos - 1].word));
+    }
     else if (keyword == "root")
-        server.root = value;
+    {
+        expect_and_increase(tokens, pos, WORD);
+        server.root = tokens[pos - 1].word;
+    }
+    else if (keyword == "err")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        code = std::stoi(tokens[pos - 1].word);
+        expect_and_increase(tokens, pos, WORD);
+        server.errors[code] = tokens[pos - 1].word;
+    }
     else
-        throw std::runtime_error("unknown directive: " + keyword);
+        throw std::runtime_error("unknown server directive: " + keyword);
+    expect_and_increase(tokens, pos, SEMICOLON);
 }
 
-void parse_location_directive(const std::vector<Token> &tokens, size_t &pos, LocationConfig &location)
-{ // need to expand this to accept more hahaha 
+void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, LocationConfig& location)
+{
+    if (pos >= tokens.size())
+        throw std::runtime_error("unexpected end of file");
+
     std::string keyword = tokens[pos].word;
     pos++;
 
@@ -30,16 +47,20 @@ void parse_location_directive(const std::vector<Token> &tokens, size_t &pos, Loc
         location.root = tokens[pos - 1].word;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
-    else
+    else if (keyword == "allowed_methods")
     {
-        throw std::runtime_error(
-            "unknown location directive: " + keyword);
+        while (pos < tokens.size() && tokens[pos].type != SEMICOLON)
+        {
+            expect_and_increase(tokens, pos, WORD);
+            location.allowed_methods.push_back(tokens[pos - 1].word);
+        }
+        expect_and_increase(tokens, pos, SEMICOLON);
     }
+    else
+        throw std::runtime_error("unknown location directive: " + keyword);
 }
 
-LocationConfig parse_location(
-    const std::vector<Token>& tokens,
-    size_t& pos)
+LocationConfig parse_location(const std::vector<Token>& tokens, size_t& pos)
 {
     LocationConfig location;
 
@@ -50,28 +71,46 @@ LocationConfig parse_location(
     while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
         parse_location_directive(tokens, pos, location);
     expect_and_increase(tokens, pos, RIGHTBRACE);
+
     return location;
+}
+
+ALLOWED_METHODS parse_method(const std::string& method)
+{
+    if (method == "GET")
+        return GET;
+    if (method == "POST")
+        return POST;
+    if (method == "DELETE")
+        return DELETE;
+    throw std::runtime_error("unknown HTTP method: " + method);
 }
 
 ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
 {
     ServerConfig server;
+    LocationConfig location;
 
+    // server
     expect_and_increase(tokens, pos, WORD);
+    if (pos < tokens.size() && tokens[pos].type == WORD)
+        server.name = tokens[pos++].word;
     expect_and_increase(tokens, pos, LEFTBRACE);
-    while (tokens[pos].type != RIGHTBRACE && pos <= tokens.size())    {
+
+    while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
+    {
         if (tokens[pos].word == "location")
         {
-            LocationConfig location = parse_location(tokens, pos);
+            location = parse_location(tokens, pos);
             server.locations.push_back(location);
         }
-        else if (tokens[pos].word == "allow_methods")
+        else if (tokens[pos].word == "allowed_methods")
         {
-            while (pos < tokens.size() &&
-                   tokens[pos].type != SEMICOLON)
+            pos++;
+            while (pos < tokens.size() && tokens[pos].type != SEMICOLON)
             {
                 expect_and_increase(tokens, pos, WORD);
-                server.allowed_methods.push_back(tokens[pos - 1].word);
+                server.allowed_methods.push_back(parse_method(tokens[pos - 1].word));
             }
             expect_and_increase(tokens, pos, SEMICOLON);
         }
@@ -79,18 +118,18 @@ ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
             parse_server_directive(tokens, pos, server);
     }
     expect_and_increase(tokens, pos, RIGHTBRACE);
+
     return server;
 }
 
-void parse(std::vector<ServerConfig> &servers, const std::vector<Token>& tokens)
+void parse(std::vector<ServerConfig>& servers, const std::vector<Token>& tokens)
 {
-    size_t i = 0;
+    size_t pos = 0;
 
-    while (i < tokens.size())
+    while (pos < tokens.size())
     {
-        if (tokens[i].word == "server")
-            servers.push_back(parse_server(tokens, i));
-        else
-            throw std::runtime_error("expected 'server'");
+        if (tokens[pos].word != "server")
+            throw std::runtime_error("expected 'server', got '" + tokens[pos].word + "'");
+        servers.push_back(parse_server(tokens, pos));
     }
 }
