@@ -1,12 +1,16 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include "../httpParser/HttpParser.hpp"
 #include "../ConfigParser/Configuration.hpp"
-#include <sys/socket.h>
 #include <unistd.h>
 #include <iostream>
 #include <poll.h>
-
+#include <cstring>
+#include <stdexcept>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 struct Server
 {

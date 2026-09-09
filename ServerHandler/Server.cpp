@@ -1,11 +1,4 @@
-#include "../ConfigParser/Configuration.hpp"
 #include "Server.hpp"
-#include <cstring>
-#include <stdexcept>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 void Init(Server& server)
 {
@@ -153,8 +146,9 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
             {
                 // This is a client socket.
                 // For now, just demonstrate that data is available.
+                HttpParser http;
                 char buffer[4096];
-                ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
+                ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer), 0);
 
                 if (bytesRead <= 0)
                 {
@@ -163,12 +157,18 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     else
                         std::cerr << "recv() failed\n";
                     close(fds[i].fd);
+                    reqs.erase(fds[i].fd);
                     fds.erase(fds.begin() + i);
                     i--;
                     continue;
                 }
                 reqs[fds[i].fd].append(buffer, bytesRead);
-                std::cout << "Received from client:\n" << buffer << std::endl;
+                if (reqs[fds[i].fd].find("\r\n\r\n") != std::string::npos)
+                    http.parseHttpRequest(reqs[fds[i].fd]);
+
+                std::cout << "Accumulated request:\n" << reqs[fds[i].fd] << std::endl;
+
+
             }
         }
     }

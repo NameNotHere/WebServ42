@@ -1,5 +1,7 @@
 #include "HttpParser.hpp"
 
+// Change return type to Request enum, then if body incomplete return request incomplete to caller
+
 void HttpParser::parseHttpRequest(const std::string& request)
 {
 	if(!requestLine(request))
@@ -32,14 +34,6 @@ void HttpParser::parseHttpRequest(const std::string& request)
 	{
 		std::cout << "Incomplete Body\n";
 	}
-
-	// if(!body(request))
-	// {
-	// 	std::cout << "Invalid Body\n";
-	// 	exit(1);
-	// }
-	// else
-	// 	std::cout << "Valid Body\n";
 }
 
 const std::string& HttpParser::getMethod() const
