@@ -27,7 +27,6 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
     return fds;
 }
 
-// Accept a new client from a listening socket
 void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds)
 {
     sockaddr_in clientAddr;
@@ -55,9 +54,7 @@ void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<
     std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
-
-// Main event loop
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> reqs)
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs)
 {
     while (true)
     {
@@ -103,10 +100,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     else
                         std::cerr << "recv() failed\n";
                     close(fds[i].fd);
-
-                    // Remove this client from poll()
                     fds.erase(fds.begin() + i);
-                    --i;
+                    i--;
                     continue;
                 }
                 reqs[fds[i].fd].append(buffer, bytesRead);
@@ -115,7 +110,6 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
         }
     }
 }
-
 
 int main(int argc, char** argv)
 {
@@ -140,9 +134,11 @@ int main(int argc, char** argv)
     buffer << file.rdbuf();
     std::string config = buffer.str();
     std::vector<ServerConfig> configs;
+
     parse(configs, lex(config));
     print_config(configs);
 
+    std::map<int, std::string> reqs;
     std::vector<Server> hosting;
     for (size_t i = 0; i < configs.size(); ++i)
     {
@@ -155,7 +151,7 @@ int main(int argc, char** argv)
     if (hosting.empty())
         return std::cerr << "No server configured\n", 1;
     std::vector<pollfd> fds = createPollFds(hosting);
-    runEventLoop(hosting, fds);
+    runEventLoop(hosting, fds, reqs);
 
     return 0;
 }
