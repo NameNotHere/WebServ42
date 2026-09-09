@@ -1,7 +1,7 @@
 NAME		= webserv
 
 CXX			= c++
-CXXFLAGS	= -Wall -Wextra -Werror -std=c++11
+CXXFLAGS	= -Wall -Wextra -Werror -std=c++17
 
 OBJ_DIR		= obj
 
@@ -13,6 +13,10 @@ SRCS		= HttpParser.cpp \
 			  HeaderValues.cpp \
 			  ContentType.cpp \
 			  HttpBody.cpp \
+			  ../ConfigParser/ConfigParser.cpp \
+			  ../ConfigParser/ConfigLex.cpp \
+			  ../ServerHandler/Server.cpp \
+			  ../main.cpp\
 			  	
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
 
