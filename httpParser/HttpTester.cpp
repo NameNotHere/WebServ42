@@ -4,7 +4,7 @@
 // {
 // 	HttpParser test;
 
-// 	test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080 \r\nConnection: kEeP-alive \r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)  \r\nContent-length:  42 \r\nConTeNt-tYpe: text/html; charset=\"ut;f-8\"; boundary=\"abc\\\"1\\\"23\"; charset=utf-10   \r\nExpect: 100-continue \r\nTransfer-Encoding: chunked\r\n\r\n7\r\nTesting\r\n4\r\nbody\r\n5\r\nfinal\r\n0\r\n\r\n");
+	// test.parseHttpRequest("GET /index.html HTTP/1.1\r\nHoSt: loCal-hOst:8080 \r\nConnection: kEeP-alive \r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)  \r\nContent-length:  42 \r\nConTeNt-tYpe: text/html; charset=\"ut;f-8\"; boundary=\"abc\\\"1\\\"23\"; charset=utf-10   \r\nExpect: 100-continue \r\nTransfer-Encoding: chunked\r\n\r\n7\r\nTesting\r\n4\r\nbody\r\n5\r\nfinal\r\n0\r\n\r\n");
 
 // 	std::cout << "\n-----Additional tests------\n\n";
 // 	std::cout << "Method:" << test.getMethod() << "\n";

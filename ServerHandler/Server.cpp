@@ -1,4 +1,4 @@
-#include "ConfigParser/Configuration.hpp"
+#include "../ConfigParser/Configuration.hpp"
 #include "Server.hpp"
 #include <cstring>
 #include <stdexcept>
