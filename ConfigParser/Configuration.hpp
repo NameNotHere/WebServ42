@@ -1,23 +1,16 @@
-#ifndef             CONFIG_HPP
-#define             CONFIG_HPP
+#ifndef CONFIG_HPP
+#define CONFIG_HPP
 
 #include <fstream>
 #include <sstream>
-#include <vector>
 #include <string>
+#include <stdexcept>
+#include <cstddef>
+#include <fstream>
+#include <vector>
+#include <map>
 
-struct  server_details
-{
-    int listen;
-    std::string server_name;
-    int root;
-    int index;
-    std::string allow_methods;
-    size_t client_body_limit;
-    std::vector<std::string> error_page;
-};
-
-enum    CONF_TOKEN
+enum CONF_TOKEN
 {
     LEFTBRACE,
     RIGHTBRACE,
@@ -25,11 +18,11 @@ enum    CONF_TOKEN
     WORD
 };
 
-enum    ALLOWED_METHODS
+enum ALLOWED_METHODS
 {
     GET,
-    STOP,
-    PLOP
+    POST,
+    DELETE
 };
 
 struct Token
@@ -51,14 +44,16 @@ struct LocationConfig
 struct ServerConfig
 {
     std::string name;
+    std::map<int, std::string> errors;
     unsigned int listen;
     std::string root;
     std::vector<LocationConfig> locations;
-    std::vector<std::string> allowed_methods; //one day itll be an enum vector but not today
+    std::vector<ALLOWED_METHODS> allowed_methods;
+    int serverFD = -1;
 };
 
-std::vector<Token>	lex(const std::string& text);
-void parse(std::vector<ServerConfig> &servers, const std::vector<Token>& tokens);
-void				expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN type);
+std::vector<Token>      lex(const std::string& text);
+void                    parse(std::vector<ServerConfig>& servers, const std::vector<Token>& tokens);
+void                    expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN expected);
 
 #endif
