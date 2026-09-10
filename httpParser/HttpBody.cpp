@@ -11,9 +11,6 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 	std::string body = request.substr(start + 4);
 
-	std::map<std::string, std::string>::const_iterator it;
-	it = _headers.find("content-length");
-
 	bool hasContentLength = _headers.find("content-length") != _headers.end();
 	bool hasTransferEncoding = _headers.find("transfer-encoding") != _headers.end();
 
@@ -22,20 +19,16 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 	if(hasTransferEncoding) // Takes precendence if both Transfer encoding and content length are present
 	{
-		// std::cout << "Handling Tranfer-Encoding\n";
 		if(!transferEncoding(body))
 			return BODY_INVALID;
 	}
 	else if(hasContentLength)
 	{
+		std::map<std::string, std::string>::const_iterator it;
+		it = _headers.find("content-length");
 		// Checked if this fails already in the program
 		unsigned long contentLength = stoul(it->second);
-		std::cout << "ContentLength:" << contentLength << "\n";
 
-		if(contentLength == body.size())
-		{
-			return BODY_VALID;
-		}
 		if(contentLength < body.size())
 		{
 			// Send error 400 or sumshit
@@ -45,7 +38,11 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 		{
 			return BODY_INCOMPLETE;
 		}
+		_requestLength = start + 4 + contentLength;
+		std::cout << "_requestLength = " << _requestLength << "\n";
+		return BODY_VALID;
 	}
+	_requestLength = start + 4;
 	return BODY_VALID;
 }
 

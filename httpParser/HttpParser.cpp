@@ -55,15 +55,20 @@ const std::string& HttpParser::getVersion() const
 	return _version;
 }
 
+size_t HttpParser::getRequestLength() const
+{
+    return _requestLength;
+}
+
 const std::map<std::string, std::string>& HttpParser::getHeaders() const
 {
     return _headers;
 }
 
-HttpParser::HttpParser(){}
+HttpParser::HttpParser() : _requestLength(0){}
 
 HttpParser::HttpParser(const HttpParser& other)
-	: _method(other._method), _target(other._target), _version(other._version){}
+	: _method(other._method), _target(other._target), _version(other._version), _requestLength(other._requestLength){}
 
 HttpParser& HttpParser::operator=(const HttpParser& other)
 {
@@ -72,6 +77,7 @@ HttpParser& HttpParser::operator=(const HttpParser& other)
 		_method = other._method;
 		_target = other._target;
 		_version = other._version;
+		_requestLength = other._requestLength;
 	}
 	return *this;
 }

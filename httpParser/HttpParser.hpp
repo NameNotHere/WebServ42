@@ -13,6 +13,7 @@ private:
 	std::string _method;
 	std::string _target;
 	std::string _version;
+	size_t _requestLength;
 	std::map<std::string, std::string> _headers;
 
 public:
@@ -44,6 +45,7 @@ public:
 	const std::string& getMethod() const;
 	const std::string& getTarget() const;
 	const std::string& getVersion() const;
+	size_t getRequestLength() const;
 	// Headers
 	bool headers(const std::string& request);
 	void ftTrim(std::string& value);
