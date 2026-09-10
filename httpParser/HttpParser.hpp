@@ -16,6 +16,13 @@ private:
 	std::map<std::string, std::string> _headers;
 
 public:
+	enum RequestStatus
+	{
+		REQUEST_VALID,
+		REQUEST_INVALID,
+		REQUEST_INCOMPLETE
+	};
+
 	enum BodyStatus
 	{
 		BODY_VALID,
@@ -29,7 +36,7 @@ public:
 	~HttpParser();
 	
 	// Request Line
-	void parseHttpRequest(const std::string& request);
+	RequestStatus parseHttpRequest(const std::string& request);
 	bool requestLine(const std::string& request);
 	bool checkMethod(const std::string& request);
 	bool checkTargetAndVersion(const std::string& request);
@@ -37,7 +44,6 @@ public:
 	const std::string& getMethod() const;
 	const std::string& getTarget() const;
 	const std::string& getVersion() const;
-	const std::map<std::string, std::string>& getHeaders() const;
 	// Headers
 	bool headers(const std::string& request);
 	void ftTrim(std::string& value);
@@ -55,6 +61,8 @@ public:
 	bool checkMediaType(const std::string& mediaType);
 	bool checkMediaParam(const std::string& param);
 	bool validValue(const std::string& value);
+	const std::map<std::string, std::string>& getHeaders() const;
+
 	// Body
 	BodyStatus body(const std::string& request);
 	bool transferEncoding(const std::string& bodyValue);

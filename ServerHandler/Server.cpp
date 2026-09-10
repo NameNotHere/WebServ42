@@ -146,9 +146,10 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
             {
                 // This is a client socket.
                 // For now, just demonstrate that data is available.
+                int fd = fds[i].fd;
                 HttpParser http;
                 char buffer[4096];
-                ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer), 0);
+                ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
 
                 if (bytesRead <= 0)
                 {
@@ -156,19 +157,34 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                         std::cout << "Client disconnected\n";
                     else
                         std::cerr << "recv() failed\n";
-                    close(fds[i].fd);
-                    reqs.erase(fds[i].fd);
+                    close(fd);
+                    reqs.erase(fd);
                     fds.erase(fds.begin() + i);
                     i--;
                     continue;
                 }
-                reqs[fds[i].fd].append(buffer, bytesRead);
-                if (reqs[fds[i].fd].find("\r\n\r\n") != std::string::npos)
-                    http.parseHttpRequest(reqs[fds[i].fd]);
+                reqs[fd].append(buffer, bytesRead);
+                if (reqs[fd].find("\r\n\r\n") != std::string::npos)
+                {
+                    HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
 
-                std::cout << "Accumulated request:\n" << reqs[fds[i].fd] << std::endl;
-
-
+                    if(status == HttpParser::REQUEST_VALID)
+                    {
+                        std::cout << "REQUEST COMPLETE!\n";
+                        // Process request
+                    }
+                    else if(status == HttpParser::REQUEST_INCOMPLETE)
+                    {
+                        std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
+                    }
+                    else if(status == HttpParser::REQUEST_INVALID)
+                    {
+                        std::cout << "REQUEST INVALID!\n";
+                        // Send error response
+                        // Close connection
+                    }
+                }
+                std::cout << "Accumulated request:\n" << reqs[fd] << "\n";
             }
         }
     }

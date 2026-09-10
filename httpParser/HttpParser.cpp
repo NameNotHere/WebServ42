@@ -2,38 +2,42 @@
 
 // Change return type to Request enum, then if body incomplete return request incomplete to caller
 
-void HttpParser::parseHttpRequest(const std::string& request)
+HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
 {
-	if(!requestLine(request))
-	{
-		std::cout << "Invalid HTTP Request!\n";
-		exit(1);
-	}
-	else
-		std::cout << "Valid HTTP Request!\n";
+    if (!requestLine(request))
+    {
+        std::cout << "Invalid HTTP Request!\n";
+        return REQUEST_INVALID;
+    }
 
-	if(!headers(request))
-	{
-		std::cout << "Invalid Header\n";
-		exit(1);
-	}
-	else
-		std::cout << "Valid Header\n";
-	
-	BodyStatus status = body(request);
+    std::cout << "Valid HTTP Request!\n";
 
-	if(status == BODY_VALID)
-	{
-		std::cout << "Valid Body\n";
-	}
-	else if(status == BODY_INVALID)
-	{
-		std::cout << "Invalid Body\n";
-	}
-	else if(status == BODY_INCOMPLETE)
-	{
-		std::cout << "Incomplete Body\n";
-	}
+    if (!headers(request))
+    {
+        std::cout << "Invalid Header\n";
+        return REQUEST_INVALID;
+    }
+
+    std::cout << "Valid Header\n";
+
+    BodyStatus status = body(request);
+
+    if (status == BODY_VALID)
+    {
+        std::cout << "Valid Body\n";
+        return REQUEST_VALID;
+    }
+    else if (status == BODY_INVALID)
+    {
+        std::cout << "Invalid Body\n";
+        return REQUEST_INVALID;
+    }
+    else if (status == BODY_INCOMPLETE)
+    {
+        std::cout << "Incomplete Body\n";
+        return REQUEST_INCOMPLETE;
+    }
+    return REQUEST_INVALID;
 }
 
 const std::string& HttpParser::getMethod() const

@@ -1,5 +1,8 @@
 #include "HttpParser.hpp"
 
+// Might have to check for empty body which is still valid
+// Will there ever be content length or Transfer-encoding and no body?
+
 HttpParser::BodyStatus HttpParser::body(const std::string& request)
 {
 	size_t start = request.find("\r\n\r\n");
@@ -31,23 +34,15 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 		if(contentLength == body.size())
 		{
-			// Body complete
-			std::cout << "Body just right\n";
 			return BODY_VALID;
 		}
 		if(contentLength < body.size())
 		{
 			// Send error 400 or sumshit
-			std::cout << "Body too Large\n";
 			return BODY_INVALID;
 		}
 		if(contentLength > body.size())
 		{
-			// Have to wait and see if more data will come 
-			// Will have to implement recieve() to keep
-			// checking if there is more data
-			// If body.size() is finished and != to content length
-			// Return error
 			return BODY_INCOMPLETE;
 		}
 	}
