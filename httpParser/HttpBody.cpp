@@ -35,11 +35,11 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 		// Checked if this fails already in the program
 		unsigned long contentLength = stoul(it->second);
 
-		if(contentLength < body.size())
-		{
-			// Send error 400 or sumshit
-			return BODY_INVALID;
-		}
+		// if(contentLength < body.size())
+		// {
+		// 	// Send error 400 or sumshit
+		// 	return BODY_INVALID;
+		// }
 		if(contentLength > body.size())
 		{
 			return BODY_INCOMPLETE;

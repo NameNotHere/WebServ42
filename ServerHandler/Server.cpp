@@ -181,8 +181,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
 
                         size_t requestLen = http.getRequestLength();
 
-                        std::cout << "Request Length:"
-                                << requestLen << "\n";
+                        std::cout << "Request Length:" << requestLen << "\n";
+                        std::cout << "Debug accum Request:" << reqs[fd] << "\n";
 
                         reqs[fd].erase(0, requestLen);
                         if (reqs[fd].empty())
