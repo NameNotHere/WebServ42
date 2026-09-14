@@ -45,6 +45,8 @@ bool HttpParser::headers(const std::string& request)
 		if(request[posStart + 2] == '\r' && request[posStart + 3] == '\n')
 			break;
 	}
+	if(_headers.find("host") == _headers.end())
+		return false;
 	return true;
 }
 

@@ -14,8 +14,14 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 	bool hasContentLength = _headers.find("content-length") != _headers.end();
 	bool hasTransferEncoding = _headers.find("transfer-encoding") != _headers.end();
 
-	if(!hasContentLength && !hasTransferEncoding && !body.empty())
-		return BODY_INVALID;
+	if(!hasContentLength && !hasTransferEncoding)
+	{
+    	_requestLength = start + 4;
+    	return BODY_VALID;
+	}
+
+	// if(!hasContentLength && !hasTransferEncoding && !body.empty())
+	// 	return BODY_INVALID;
 
 	if(hasTransferEncoding) // Takes precendence if both Transfer encoding and content length are present
 	{
