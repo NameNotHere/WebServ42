@@ -14,6 +14,7 @@ private:
 	std::string _target;
 	std::string _version;
 	size_t _requestLength;
+	std::string _body;
 	std::map<std::string, std::string> _headers;
 
 public:
@@ -45,6 +46,7 @@ public:
 	const std::string& getMethod() const;
 	const std::string& getTarget() const;
 	const std::string& getVersion() const;
+	const std::string& getBody() const;
 	size_t getRequestLength() const;
 	// Headers
 	bool headers(const std::string& request);

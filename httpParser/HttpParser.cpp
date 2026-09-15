@@ -60,6 +60,11 @@ size_t HttpParser::getRequestLength() const
     return _requestLength;
 }
 
+const std::string& HttpParser::getBody() const
+{
+	return _body;
+}
+
 const std::map<std::string, std::string>& HttpParser::getHeaders() const
 {
     return _headers;
