@@ -155,7 +155,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     if (bytesRead == 0)
                         std::cout << "Client disconnected\n";
                     else
-                        std::cerr << "recv() failed\n";
+                        // std::cerr << "recv() failed\n";
+                        perror("recv");
                     close(fd);
                     reqs.erase(fd);
                     fds.erase(fds.begin() + i);
