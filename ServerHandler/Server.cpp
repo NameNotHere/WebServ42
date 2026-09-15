@@ -191,7 +191,15 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
             std::cout << "Request Length:" << requestLen << "\n";
             std::cout << "Debug accum Request:" << reqs[fd] << "\n";
+            // TEMPORARY RESPONSE FOR TESTERS
+                std::string response =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Length: 15\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "Hello, Webserv!";
 
+            send(fd, response.c_str(), response.size(), 0);
             reqs[fd].erase(0, requestLen);
             if (reqs[fd].empty())
                 return;
