@@ -129,7 +129,6 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
             // Check whether this FD is one of our listening sockets
             bool isListeningSocket = false;
             size_t serverIndex = 0;
-
             for (size_t j = 0; j < hosting.size(); ++j)
             {
                 if (fds[i].fd == hosting[j].serverFD)
@@ -147,6 +146,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                 // This is a client socket.
                 // For now, just demonstrate that data is available.
                 int fd = fds[i].fd;
+                HttpParser http;
                 char buffer[4096];
                 ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
 
@@ -163,76 +163,56 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
-                runHttpParser(fd, i, reqs, fds);
+                // This gets ignored if theres only \r\n\r but it should error or somthing 
+                if (reqs[fd].find("\r\n\r\n") == std::string::npos)
+                {
+                    std::cout << "REQUEST INCOMPLETE\n";
+                    continue;
+                }    
+                HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
+
+                if(status == HttpParser::REQUEST_VALID)
+                {
+                    std::cout << "REQUEST COMPLETE!\n";
+                    size_t requestLen = http.getRequestLength();
+                    std::cout << "Request Length:" << requestLen << "\n";
+                    std::cout << "Debug-accum request:\n" << reqs[fd] << "\n";
+
+                    std::cout << "Method: " << http.getMethod() << "\n";
+                    std::cout << "Target: " << http.getTarget() << "\n";
+
+                    routeRequest(fd, http);
+
+                    close(fd);
+                    reqs.erase(fd);
+                    fds.erase(fds.begin() + i);
+                    i--;
+                    continue;
+                }
+                else if(status == HttpParser::REQUEST_INCOMPLETE)
+                {
+                    std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
+                }
+                else if(status == HttpParser::REQUEST_INVALID)
+                {
+                    std::cout << "REQUEST INVALID!\n";
+                    std::string response =
+                    "HTTP/1.1 400 Bad Request\r\n"
+                    "Content-Length: 0\r\n"
+                    "Connection: close\r\n"
+                    "\r\n";
+
+                    send(fd, response.c_str(), response.size(), 0);
+
+                    close(fd);
+                    reqs.erase(fd);
+                    fds.erase(fds.begin() + i);
+                    i--;
+                    std::cout << "Client disconnected\n";
+                    continue;
+                }
+                std::cout << "Accumulated request:\n" << reqs[fd] << "\n";
             }
         }
     }
-}
-
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds)
-{
-    while (true)
-    {
-        if (reqs[fd].find("\r\n\r\n") == std::string::npos)
-        {
-            std::cout << "REQUEST INCOMPLETE\n";
-            return;
-        }
-        HttpParser http;
-
-        HttpParser::RequestStatus status =
-            http.parseHttpRequest(reqs[fd]);
-
-        if (status == HttpParser::REQUEST_VALID)
-        {
-            std::cout << "REQUEST COMPLETE!\n";
-
-            size_t requestLen = http.getRequestLength();
-
-            std::cout << "Request Length:" << requestLen << "\n";
-            std::cout << "Debug accum Request:" << reqs[fd] << "\n";
-            // TEMPORARY RESPONSE FOR TESTERS
-                std::string response =
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Length: 15\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-                "Hello, Webserv!";
-
-            send(fd, response.c_str(), response.size(), 0);
-            reqs[fd].erase(0, requestLen);
-            if (reqs[fd].empty())
-                return;
-
-            std::cout << "Another request is waiting in the buffer!\n";
-        }
-        else if (status == HttpParser::REQUEST_INCOMPLETE)
-        {
-            std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
-            return;
-        }
-        else if (status == HttpParser::REQUEST_INVALID)
-        {
-            std::cout << "REQUEST INVALID!\n";
-
-            std::string response =
-                "HTTP/1.1 400 Bad Request\r\n"
-                "Content-Length: 0\r\n"
-                "Connection: close\r\n"
-                "\r\n";
-
-            send(fd, response.c_str(), response.size(), 0);
-
-            close(fd);
-            reqs.erase(fd);
-            fds.erase(fds.begin() + i);
-            i--;
-
-            std::cout << "Client disconnected\n";
-            return;
-        }
-        std::cout << "Accumulated request:\n"
-                << reqs[fd] << "\n";
-    }
-    return;
 }
