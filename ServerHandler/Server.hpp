@@ -18,12 +18,11 @@ struct Server
     ServerConfig conf;
 };
 
-std::string             buildResponse(const std::string& statusLine, const std::string& body, const std::string& contentType = "text/html");
-void                    routeRequest(int fd, const HttpParser& http);
-void                    print_config(const std::vector<ServerConfig>& servers);
-void                    Init(Server& server);
-void                    runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
-void                    handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds);
-std::vector<pollfd>     createPollFds(const std::vector<Server>& hosting);
+void print_config(const std::vector<ServerConfig>& servers);
+void Init(Server& server);
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
+void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds);
+std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds);
 
 #endif
