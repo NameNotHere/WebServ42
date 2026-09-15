@@ -4,10 +4,11 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, ServerConfig& server)
 {
-    int code;
     std::string keyword = tokens[pos].word;
     
     pos++;
@@ -24,9 +25,14 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
     else if (keyword == "err")
     {
         expect_and_increase(tokens, pos, WORD);
-        code = std::stoi(tokens[pos - 1].word);
+        int code = std::stoi(tokens[pos - 1].word);
+        if (code < 100 || code > 699)
+            throw std::runtime_error("Invalid error code\n");
         expect_and_increase(tokens, pos, WORD);
         server.errors[code] = tokens[pos - 1].word;
+        fs::path err_path(server.errors[code]);
+        if (!fs::exists(err_path))
+            throw std::runtime_error("Error page file does not exist: " + server.errors[code]);
     }
     else
         throw std::runtime_error("unknown server directive: " + keyword);
