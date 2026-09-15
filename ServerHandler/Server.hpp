@@ -23,5 +23,6 @@ void Init(Server& server);
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
 void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds);
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds);
 
 #endif

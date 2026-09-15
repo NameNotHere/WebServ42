@@ -18,6 +18,10 @@ bool HttpParser::checkMethod(const std::string& request)
 	if(!validChar(method))
 		return false;
 
+	lowerCase(method);
+	if(method != "get" && method != "post" && method != "delete")
+		return false;
+
 	_method = method;
 	return true;
 }

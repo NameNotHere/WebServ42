@@ -163,62 +163,68 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
-                while (true)
-                {
-                    if (reqs[fd].find("\r\n\r\n") == std::string::npos)
-                    {
-                        std::cout << "REQUEST INCOMPLETE\n";
-                        break;
-                    }
-                    HttpParser http;
-
-                    HttpParser::RequestStatus status =
-                        http.parseHttpRequest(reqs[fd]);
-
-                    if (status == HttpParser::REQUEST_VALID)
-                    {
-                        std::cout << "REQUEST COMPLETE!\n";
-
-                        size_t requestLen = http.getRequestLength();
-
-                        std::cout << "Request Length:" << requestLen << "\n";
-                        std::cout << "Debug accum Request:" << reqs[fd] << "\n";
-
-                        reqs[fd].erase(0, requestLen);
-                        if (reqs[fd].empty())
-                            break;
-
-                        std::cout << "Another request is waiting in the buffer!\n";
-                    }
-                    else if (status == HttpParser::REQUEST_INCOMPLETE)
-                    {
-                        std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
-                        break;
-                    }
-                    else if (status == HttpParser::REQUEST_INVALID)
-                    {
-                        std::cout << "REQUEST INVALID!\n";
-
-                        std::string response =
-                            "HTTP/1.1 400 Bad Request\r\n"
-                            "Content-Length: 0\r\n"
-                            "Connection: close\r\n"
-                            "\r\n";
-
-                        send(fd, response.c_str(), response.size(), 0);
-
-                        close(fd);
-                        reqs.erase(fd);
-                        fds.erase(fds.begin() + i);
-                        i--;
-
-                        std::cout << "Client disconnected\n";
-                        break;
-                    }
-                    std::cout << "Accumulated request:\n"
-                            << reqs[fd] << "\n";
-                }
+                runHttpParser(fd, i, reqs, fds);
             }
         }
     }
+}
+
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds)
+{
+    while (true)
+    {
+        if (reqs[fd].find("\r\n\r\n") == std::string::npos)
+        {
+            std::cout << "REQUEST INCOMPLETE\n";
+            return;
+        }
+        HttpParser http;
+
+        HttpParser::RequestStatus status =
+            http.parseHttpRequest(reqs[fd]);
+
+        if (status == HttpParser::REQUEST_VALID)
+        {
+            std::cout << "REQUEST COMPLETE!\n";
+
+            size_t requestLen = http.getRequestLength();
+
+            std::cout << "Request Length:" << requestLen << "\n";
+            std::cout << "Debug accum Request:" << reqs[fd] << "\n";
+
+            reqs[fd].erase(0, requestLen);
+            if (reqs[fd].empty())
+                return;
+
+            std::cout << "Another request is waiting in the buffer!\n";
+        }
+        else if (status == HttpParser::REQUEST_INCOMPLETE)
+        {
+            std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
+            return;
+        }
+        else if (status == HttpParser::REQUEST_INVALID)
+        {
+            std::cout << "REQUEST INVALID!\n";
+
+            std::string response =
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Length: 0\r\n"
+                "Connection: close\r\n"
+                "\r\n";
+
+            send(fd, response.c_str(), response.size(), 0);
+
+            close(fd);
+            reqs.erase(fd);
+            fds.erase(fds.begin() + i);
+            i--;
+
+            std::cout << "Client disconnected\n";
+            return;
+        }
+        std::cout << "Accumulated request:\n"
+                << reqs[fd] << "\n";
+    }
+    return;
 }
