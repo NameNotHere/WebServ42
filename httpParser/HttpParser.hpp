@@ -67,7 +67,7 @@ public:
 
 	// Body
 	BodyStatus body(const std::string& request);
-	bool transferEncoding(const std::string& bodyValue);
+	BodyStatus transferEncoding(const std::string& bodyValue);
 	bool convertBytes(std::string& bytes, size_t& digit, const std::string& value);
 
 };

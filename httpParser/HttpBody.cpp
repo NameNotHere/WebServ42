@@ -25,8 +25,13 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 	if(hasTransferEncoding) // Takes precendence if both Transfer encoding and content length are present
 	{
-		if(!transferEncoding(body))
+		BodyStatus status = transferEncoding(body);
+
+		if(status == BODY_INVALID)
 			return BODY_INVALID;
+		if(status == BODY_INCOMPLETE)
+			return BODY_INCOMPLETE;
+		return BODY_VALID;
 	}
 	else if(hasContentLength)
 	{
@@ -35,11 +40,6 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 		// Checked if this fails already in the program
 		unsigned long contentLength = stoul(it->second);
 
-		// if(contentLength < body.size())
-		// {
-		// 	// Send error 400 or sumshit
-		// 	return BODY_INVALID;
-		// }
 		if(contentLength > body.size())
 		{
 			return BODY_INCOMPLETE;
@@ -52,7 +52,7 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 	return BODY_VALID;
 }
 
-bool HttpParser::transferEncoding(const std::string& bodyValue)
+HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& bodyValue)
 {
 	std::string body = bodyValue;
 	size_t digit = 0;
@@ -66,30 +66,30 @@ bool HttpParser::transferEncoding(const std::string& bodyValue)
 
 		size_t bytesPos = body.find("\r\n");
 		if(bytesPos == std::string::npos)
-			return false;
+			return BODY_INCOMPLETE;
 
 		std::string bytes = body.substr(0, bytesPos);
-		// std::cout << "Bytes:" << bytes << "\n";
+		std::cout << "Bytes:" << bytes << "\n";
 
 		body = body.substr(bytesPos + 2);
 
 		size_t valuePos = body.find("\r\n");
 		if(valuePos == std::string::npos)
-			return false;
+			return BODY_INCOMPLETE;
 
 		std::string value = body.substr(0, valuePos);
-		// std::cout << "Value:" << value << "\n";
+		std::cout << "Value:" << value << "\n";
+	
 		if(!convertBytes(bytes, digit, value))
-			return false;
+			return BODY_INVALID;
 		if(digit == 0)
 			break;
 		body = body.substr(valuePos + 2);
 	}
-	if(body[i] != '\n' && body[i - 1] != '\r' 
-	  && body[i - 2] != '\n' && body[i - 3] != '\r')
-		return false;
-
-	return true;
+	if(body[i] != '\r' && body[i - 1] != '\n' 
+	  && body[i - 2] != '\r' && body[i - 3] != '\n')
+		return BODY_INVALID;
+	return BODY_VALID;
 }
 
 bool HttpParser::convertBytes(std::string& bytes, size_t& digit, const std::string& value)

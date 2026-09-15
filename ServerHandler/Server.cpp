@@ -194,10 +194,11 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             // TEMPORARY RESPONSE FOR TESTERS
                 std::string response =
                 "HTTP/1.1 200 OK\r\n"
-                "Content-Length: 15\r\n"
+                // "Content-Length: 15\r\n"
+                "Content-Length: 38\r\n"
                 "Connection: close\r\n"
                 "\r\n"
-                "Hello, Webserv!";
+                "Hello, Webserv, Sam and Orhan are gay!";
 
             send(fd, response.c_str(), response.size(), 0);
             reqs[fd].erase(0, requestLen);
