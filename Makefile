@@ -1,7 +1,7 @@
 NAME		= webserv
 
 CXX			= c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++17 -I.
+CXXFLAGS = -Wall -Wextra -Werror -std=c++17 -I. -MMD -MP
 
 OBJ_DIR		= obj
 
@@ -19,6 +19,7 @@ SRCS		= httpParser/HttpParser.cpp \
 			  main.cpp
 
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
+DEPS 		= $(OBJS:.o=.d)
 
 RM			= rm -rf
 
@@ -38,5 +39,7 @@ fclean: clean
 	$(RM) $(NAME)
 
 re: fclean all
+
+-include $(DEPS)
 
 .PHONY: all clean fclean re

@@ -73,7 +73,7 @@ const std::map<std::string, std::string>& HttpParser::getHeaders() const
 HttpParser::HttpParser() : _requestLength(0){}
 
 HttpParser::HttpParser(const HttpParser& other)
-	: _method(other._method), _target(other._target), _version(other._version), _requestLength(other._requestLength){}
+    : _requestLength(other._requestLength), _method(other._method), _target(other._target), _version(other._version){}
 
 HttpParser& HttpParser::operator=(const HttpParser& other)
 {

@@ -5,6 +5,7 @@
 
 HttpParser::BodyStatus HttpParser::body(const std::string& request)
 {
+	_body.clear();
 	size_t start = request.find("\r\n\r\n");
 	if(start == std::string::npos)
    		return BODY_INVALID;
@@ -20,10 +21,7 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
     	return BODY_VALID;
 	}
 
-	// if(!hasContentLength && !hasTransferEncoding && !body.empty())
-	// 	return BODY_INVALID;
-
-	if(hasTransferEncoding) // Takes precendence if both Transfer encoding and content length are present
+	if(hasTransferEncoding)
 	{
 		size_t bodyLength = 0;
 		BodyStatus status = transferEncoding(body, bodyLength);
@@ -32,11 +30,9 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 			return BODY_INVALID;
 		if(status == BODY_INCOMPLETE)
 			return BODY_INCOMPLETE;
-		std::cout << "Body length: " << bodyLength << "\n";
+
 		_requestLength = start + 4 + bodyLength;
-		// THIS _body NEED TO BE EXTRACTED PROPERLY
-		_body = body;
-		// std::cout << "TESTING BODY:" << getBody() << "\n";
+		std::cout << "Transfer-Encoding body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
 	else if(hasContentLength)
@@ -51,9 +47,8 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 			return BODY_INCOMPLETE;
 		}
 		_requestLength = start + 4 + contentLength;
-		std::cout << "_requestLength = " << _requestLength << "\n";
 		_body = body;
-		// std::cout << "TESTING BODY:" << getBody() << "\n";
+		std::cout << "Content-Length body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
 	_requestLength = start + 4;
@@ -98,6 +93,8 @@ HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& body, siz
 
         if (body.size() < pos + digit + 2)
             return BODY_INCOMPLETE;
+
+		_body += body.substr(pos, digit);
 
         pos += digit;
 

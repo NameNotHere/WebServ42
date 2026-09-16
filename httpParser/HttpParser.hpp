@@ -3,17 +3,18 @@
 
 #include <map>
 #include <string>
-#include <iostream>
 #include <unistd.h>
+#include <iostream>
+#include <algorithm>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 class HttpParser {
 private:
+	size_t      _requestLength;
 	std::string _method;
 	std::string _target;
 	std::string _version;
-	size_t _requestLength;
 	std::string _body;
 	std::map<std::string, std::string> _headers;
 
