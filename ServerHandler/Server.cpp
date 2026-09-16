@@ -186,7 +186,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
         if (status == HttpParser::REQUEST_VALID)
         {
-            std::cout << "REQUEST COMPLETE!\n";
+            std::cout << "REQUEST COMPLETE!\n\n";
 
             size_t requestLen = http.getRequestLength();
 
