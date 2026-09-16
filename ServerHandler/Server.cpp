@@ -190,15 +190,13 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
             size_t requestLen = http.getRequestLength();
 
-            // TEMPORARY RESPONSE FOR TESTERS
-                std::string response =
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Length: 17\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-                "Hello, Webserv!!!";
+            if(http.getMethod() == "post")
+            {
+                Post post;
+                std::string response = post.handleRequest(http);
+                send(fd, response.c_str(), response.size(), 0);
+            }
 
-            send(fd, response.c_str(), response.size(), 0);
             reqs[fd].erase(0, requestLen);
             if (reqs[fd].empty())
                 return;
@@ -214,6 +212,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
         {
             std::cout << "REQUEST INVALID!\n";
 
+            // TEMPORARY RESPONSE, need to make a response function or sumshit
             std::string response =
                 "HTTP/1.1 400 Bad Request\r\n"
                 "Content-Length: 0\r\n"
