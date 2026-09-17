@@ -205,16 +205,27 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
             return;
         }
-        else if (status == HttpParser::REQUEST_INVALID)
+        // RESPONSES
+        else
         {
-            std::cout << "REQUEST INVALID!\n";
+            std::string response;
+            if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
+                response = Response::create(405, "");
 
-            // TEMPORARY RESPONSE, need to make a response function or sumshit
-            std::string response =
-                "HTTP/1.1 400 Bad Request\r\n"
-                "Content-Length: 0\r\n"
-                "Connection: close\r\n"
-                "\r\n";
+            if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
+                response = Response::create(404, "");
+
+            if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
+                response = Response::create(505, "");
+
+            if (status == HttpParser::REQUEST_HEADER_INVALID)
+                response = Response::create(400, "");
+
+            if (status == HttpParser::REQUEST_BODY_INVALID)
+                response = Response::create(400, "");
+
+            if (status == HttpParser::REQUEST_INVALID)
+                response = Response::create(400, "");
 
             send(fd, response.c_str(), response.size(), 0);
 

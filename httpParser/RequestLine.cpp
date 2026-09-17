@@ -1,10 +1,17 @@
 #include "HttpParser.hpp"
 
-bool HttpParser::requestLine(const std::string& request)
+HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 {
-	if(!checkMethod(request) || !checkTargetAndVersion(request))
-		return false;
-	return true;
+	if(!checkMethod(request))
+		return REQUEST_METHOD_NOT_ALLOWED;
+
+	if(!checkTarget(request))
+		return REQUEST_TARGET_NOT_FOUND;
+
+	if(!checkVersion(request))
+		return REQUEST_VERSION_NOT_SUPPORTED;
+
+	return REQUEST_VALID;
 }
 
 bool HttpParser::checkMethod(const std::string& request)
@@ -26,7 +33,30 @@ bool HttpParser::checkMethod(const std::string& request)
 	return true;
 }
 
-bool HttpParser::checkTargetAndVersion(const std::string& request)
+bool HttpParser::checkTarget(const std::string& request)
+{
+	size_t firstSpace = request.find(' ');
+
+	if(firstSpace == std::string::npos)
+		return false;
+
+	size_t secondSpace = request.find(' ', firstSpace + 1);
+	if(secondSpace == std::string::npos)
+		return false;
+
+	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
+	std::string illegal = "<>\"{}|\\^` ";
+	for(size_t i = 0; i < target.size(); i++)
+	{
+		if(illegal.find(target[i]) != std::string::npos)
+			return false;
+	}
+	_target = target;
+	
+	return true;
+}
+
+bool HttpParser::checkVersion(const std::string& request)
 {
 	size_t firstSpace = request.find(' ');
 
@@ -41,17 +71,8 @@ bool HttpParser::checkTargetAndVersion(const std::string& request)
 	if(version != "HTTP/1.1\r\n")
 		return false;
 
-	std::string target = request.substr(firstSpace + 1, secondSpace - firstSpace - 1);
-	std::string illegal = "<>\"{}|\\^` ";
-	for(size_t i = 0; i < target.size(); i++)
-	{
-		if(illegal.find(target[i]) != std::string::npos)
-			return false;
-	}
-	_target = target;
-
 	version = request.substr(secondSpace + 1, 8);
 	_version = version;
-	
+
 	return true;
 }

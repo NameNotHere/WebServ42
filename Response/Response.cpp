@@ -4,14 +4,18 @@ std::string Response::statusMsg(int statusCode)
 {
 	if (statusCode == 200)
         return "OK";
-    if (statusCode == 400)
+    else if (statusCode == 400)
         return "Bad Request";
-    if (statusCode == 404)
+    else if (statusCode == 404)
         return "Not Found";
-    if (statusCode == 405)
+    else if (statusCode == 405)
         return "Method Not Allowed";
-    if (statusCode == 500)
+	else if (statusCode == 413)
+    	return "Content Too Large";
+    else if (statusCode == 500)
         return "Internal Server Error";
+    else if (statusCode == 505)
+        return "HTTP Version Not Supported";
 
     return "Unknown";
 }

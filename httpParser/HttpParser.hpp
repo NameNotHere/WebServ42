@@ -21,9 +21,17 @@ private:
 public:
 	enum RequestStatus
 	{
+		REQUEST_BAD,
 		REQUEST_VALID,
 		REQUEST_INVALID,
-		REQUEST_INCOMPLETE
+		REQUEST_NOT_FOUND,
+		REQUEST_INCOMPLETE,
+		REQUEST_BODY_INVALID,
+		REQUEST_HEADER_INVALID,
+		REQUEST_TARGET_NOT_FOUND,
+		REQUEST_CONTENT_TOO_LARGE,
+		REQUEST_METHOD_NOT_ALLOWED,
+		REQUEST_VERSION_NOT_SUPPORTED
 	};
 
 	enum BodyStatus
@@ -40,9 +48,10 @@ public:
 	
 	// Request Line
 	RequestStatus parseHttpRequest(const std::string& request);
-	bool requestLine(const std::string& request);
+	RequestStatus requestLine(const std::string& request);
 	bool checkMethod(const std::string& request);
-	bool checkTargetAndVersion(const std::string& request);
+	bool checkTarget(const std::string& request);
+	bool checkVersion(const std::string& request);
 	bool validChar(const std::string& method);
 	const std::string& getMethod() const;
 	const std::string& getTarget() const;

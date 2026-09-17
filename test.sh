@@ -3,22 +3,30 @@
 HOST="localhost"
 PORT="2020"
 
-run_test()
-{
-    echo
-    echo "===== $1 ====="
-    printf "%b" "$2" | nc -q 0 "$HOST" "$PORT"
-    echo
-}
+echo "===== 400: Bad Request ====="
+printf 'GET / HTTP/1.1\r\nHost\r\n\r\n' | nc $HOST $PORT
+echo
 
-run_test "1. Multiple chunks" \
-'POST / HTTP/1.1\r\nHost: localhost:2020\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n3\r\ndef\r\n0\r\n\r\n'
+echo "===== 405: Method Not Allowed ====="
+printf 'PUT / HTTP/1.1\r\nHost: localhost\r\n\r\n' | nc $HOST $PORT
+echo
 
-run_test "2. Empty chunked body" \
-'POST / HTTP/1.1\r\nHost: localhost:2020\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n'
+echo "===== 505: HTTP Version Not Supported ====="
+printf 'GET / HTTP/2.0\r\nHost: localhost\r\n\r\n' | nc $HOST $PORT
+echo
 
-run_test "3. Chunk extension" \
-'POST / HTTP/1.1\r\nHost: localhost:2020\r\nTransfer-Encoding: chunked\r\n\r\n0;foo=bar\r\n\r\n'
+echo "===== 400: Missing Host ====="
+printf 'GET / HTTP/1.1\r\n\r\n' | nc $HOST $PORT
+echo
 
-run_test "4. Chunked + second request" \
-'POST /first HTTP/1.1\r\nHost: localhost:2020\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\nGET /second HTTP/1.1\r\nHost: localhost:2020\r\n\r\n'
+echo "===== 400: Invalid Content-Length ====="
+printf 'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: abc\r\n\r\nhello' | nc $HOST $PORT
+echo
+
+echo "===== 400: Invalid Chunked Body ====="
+printf 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\nG\r\nhello\r\n0\r\n\r\n' | nc $HOST $PORT
+echo
+
+echo "===== 400: Invalid Header ====="
+printf 'GET / HTTP/1.1\r\nHost localhost:2020\r\n\r\n' | nc $HOST $PORT
+echo
