@@ -16,6 +16,7 @@ SRCS		= httpParser/HttpParser.cpp \
 			  ConfigParser/ConfigParser.cpp \
 			  ConfigParser/ConfigLex.cpp \
 			  ServerHandler/Server.cpp \
+			  ServerHandler/Responder.cpp \
 			  main.cpp
 
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)

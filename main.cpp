@@ -9,6 +9,35 @@
 #include <unistd.h>
 #include <cstring>
 
+void print_config(const std::vector<ServerConfig>& servers)
+{
+    for (const ServerConfig& server : servers)
+    {
+        std::cout << "Server\n";
+        std::cout << "  name: " << server.name << '\n';
+        std::cout << "  listen: " << server.listen << '\n';
+        std::cout << "  root: " << server.root << '\n';
+        std::cout << "\t\tErrors: \n" ;
+        for (auto &[key, value] : server.errors)
+            std::cout << " \t" << key << " : " << value << '\n';
+        std::cout << "\nallowed methods:";
+        for (const ALLOWED_METHODS& method : server.allowed_methods)
+            std::cout << ' ' << method;
+        std::cout << '\n';
+
+        for (const LocationConfig& location : server.locations)
+        {
+            std::cout << "\tLocation: " << location.path << '\n';
+            std::cout << "\troot: " << location.root << '\n';
+
+            std::cout << "    allowed methods:";
+            for (const std::string& method : location.allowed_methods)
+                std::cout << ' ' << method;
+            std::cout << '\n';
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     if (argc != 2)
