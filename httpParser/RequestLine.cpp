@@ -2,7 +2,10 @@
 
 HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 {
-	if(!checkMethod(request))
+	if(checkMethod(request) == REQUEST_BAD)
+		return REQUEST_BAD;
+
+	else if(checkMethod(request) == REQUEST_METHOD_NOT_ALLOWED)
 		return REQUEST_METHOD_NOT_ALLOWED;
 
 	if(!checkTarget(request))
@@ -14,23 +17,35 @@ HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 	return REQUEST_VALID;
 }
 
-bool HttpParser::checkMethod(const std::string& request)
+HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 {
 	size_t pos = request.find(' ');
 
 	if(pos == std::string::npos || request[pos + 1] != '/')
-		return false;
+		return REQUEST_BAD;
 
 	std::string method = request.substr(0, pos);
 	if(!validChar(method))
-		return false;
+		return REQUEST_BAD;
 
 	lowerCase(method);
-	if(method != "get" && method != "post" && method != "delete")
-		return false;
-
+	if (method != "get"    &&
+		method != "head"   &&
+		method != "post"   &&
+		method != "put"    &&
+		method != "delete" &&
+		method != "options"&&
+		method != "trace"  &&
+		method != "connect"&&
+		method != "patch"   )
+		return REQUEST_BAD;
+	if (method != "get"    &&
+		method != "post"   &&
+		method != "delete"  )
+		return  REQUEST_METHOD_NOT_ALLOWED;
+	
 	_method = method;
-	return true;
+	return REQUEST_VALID;
 }
 
 bool HttpParser::checkTarget(const std::string& request)

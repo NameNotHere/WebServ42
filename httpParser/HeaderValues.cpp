@@ -7,7 +7,6 @@ bool HttpParser::checkHost(const std::string& value)
 	if(value.empty())
 		return false;
 
-	std::cout << "Value:" << value << "\n";
 	if(!checkWhiteSpace(value))
 		return false;
 

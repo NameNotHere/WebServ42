@@ -4,7 +4,12 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
 {
     RequestStatus requestStatus = requestLine(request);
 
-    if (requestStatus == REQUEST_METHOD_NOT_ALLOWED)
+    if (requestStatus == REQUEST_BAD)
+    {
+        std::cout << "Request BAAAAD\n";
+        return REQUEST_BAD;
+    }
+    else if (requestStatus == REQUEST_METHOD_NOT_ALLOWED)
     {
         std::cout << "Request Method Not allowed\n";
         return REQUEST_METHOD_NOT_ALLOWED;

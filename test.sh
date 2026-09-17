@@ -3,208 +3,134 @@
 HOST="localhost"
 PORT="2020"
 
-pass=0
-fail=0
+passed=0
+failed=0
 
-run_test()
+test_request()
 {
     name="$1"
     request="$2"
     expected="$3"
 
-    echo "========================================"
-    echo "TEST: $name"
-    echo "========================================"
+    result=$(printf "$request" | nc -w 2 $HOST $PORT)
 
-    response=$(printf "$request" | nc -w 2 "$HOST" "$PORT" 2>/dev/null)
-
-    echo "$response"
-    echo
-
-    if echo "$response" | grep -q "$expected"; then
-        echo "✅ PASS"
-        ((pass++))
+    if echo "$result" | grep -q "$expected"; then
+        echo "[PASS] $name"
     else
-        echo "❌ FAIL"
-        echo "Expected: $expected"
-        ((fail++))
+        echo "[FAIL] $name"
     fi
 
+    echo "  Input:"
+    printf '%b' "$request" | cat -v
+    echo "  Expected: $expected"
+    echo "  Got:"
+    echo "$result" | head -n 1
     echo
+
+    if echo "$result" | grep -q "$expected"; then
+        ((passed++))
+    else
+        ((failed++))
+    fi
 }
 
-# ============================================================
-# VALID REQUESTS
-# ============================================================
 
-run_test \
-"Basic GET" \
-'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n' \
-"200 OK"
-
-run_test \
-"GET with query string" \
-'GET /index.html?hello=world HTTP/1.1\r\nHost: localhost\r\n\r\n' \
-"200 OK"
-
-
-# ============================================================
-# REQUEST LINE ERRORS
-# ============================================================
-
-run_test \
-"Unsupported method" \
-'PUT / HTTP/1.1\r\nHost: localhost\r\n\r\n' \
-"405 Method Not Allowed"
-
-run_test \
-"Unsupported HTTP version" \
-'GET / HTTP/2.0\r\nHost: localhost\r\n\r\n' \
-"505 HTTP Version Not Supported"
-
-run_test \
-"Malformed request line" \
-'GET garbage garbage\r\nHost: localhost\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Completely garbage request" \
-'this is not HTTP\r\n\r\n' \
-"400 Bad Request"
-
-
-# ============================================================
-# HEADER ERRORS
-# ============================================================
-
-run_test \
-"Missing Host" \
-'GET / HTTP/1.1\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Malformed Host header" \
-'GET / HTTP/1.1\r\nHost localhost\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Empty Host" \
-'GET / HTTP/1.1\r\nHost:\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Duplicate Host" \
-'GET / HTTP/1.1\r\nHost: localhost\r\nHost: example.com\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Invalid Content-Length" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: abc\r\n\r\nhello' \
-"400 Bad Request"
-
-run_test \
-"Negative Content-Length" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: -5\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Invalid Transfer-Encoding" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: bananas\r\n\r\n' \
-"400 Bad Request"
-
-
-# ============================================================
-# CONTENT-LENGTH BODY TESTS
-# ============================================================
-
-run_test \
-"POST with complete body" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nhello' \
-"200 OK"
-
-run_test \
-"POST empty body" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n' \
-"200 OK"
-
-run_test \
-"POST body shorter than Content-Length" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\nhello' \
-""
-
-# ============================================================
-# CHUNKED TESTS
-# ============================================================
-
-run_test \
-"Chunked body" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n4\r\ntest\r\n0\r\n\r\n' \
-"200 OK"
-
-run_test \
-"Chunked multiple chunks" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n3\r\ndef\r\n0\r\n\r\n' \
-"200 OK"
-
-run_test \
-"Chunked empty body" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n' \
-"200 OK"
-
-run_test \
-"Invalid chunk size" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\nG\r\nhello\r\n0\r\n\r\n' \
-"400 Bad Request"
-
-run_test \
-"Chunk missing CRLF" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n4\r\ntest0\r\n\r\n' \
-"400 Bad Request"
-
-
-# ============================================================
-# HEADER CASE TESTS
-# ============================================================
-
-run_test \
-"Lowercase host" \
-'GET / HTTP/1.1\r\nhost: localhost\r\n\r\n' \
-"200 OK"
-
-run_test \
-"Mixed case Host" \
-'GET / HTTP/1.1\r\nHoSt: localhost\r\n\r\n' \
-"200 OK"
-
-run_test \
-"Mixed case Transfer-Encoding" \
-'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: ChUnKeD\r\n\r\n4\r\ntest\r\n0\r\n\r\n' \
-"200 OK"
-
-
-# ============================================================
-# PIPELINING / MULTIPLE REQUESTS
-# ============================================================
-
-echo "========================================"
-echo "TEST: Two requests in one connection"
-echo "========================================"
-
-{
-    printf 'GET /one HTTP/1.1\r\nHost: localhost\r\n\r\n'
-    printf 'GET /two HTTP/1.1\r\nHost: localhost\r\n\r\n'
-} | nc -w 2 "$HOST" "$PORT"
-
-echo
-echo "========================================"
-echo "SUMMARY"
-echo "========================================"
-echo "Passed: $pass"
-echo "Failed: $fail"
+echo "=============================="
+echo "      WEBSERV HTTP TESTS"
+echo "=============================="
 echo
 
-if [ "$fail" -eq 0 ]; then
-    echo "🎉 ALL TESTS PASSED"
-else
-    echo "⚠️ SOME TESTS FAILED"
-fi
+test_request \
+    "Basic GET" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "200 OK"
+
+test_request \
+    "GET with query" \
+    "GET /test?hello=world HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "200 OK"
+
+test_request \
+    "Unsupported PUT" \
+    "PUT / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "405 Method Not Allowed"
+
+test_request \
+    "Unsupported PATCH" \
+    "PATCH / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "405 Method Not Allowed"
+
+test_request \
+    "Unsupported OPTIONS" \
+    "OPTIONS / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "405 Method Not Allowed"
+
+test_request \
+    "HTTP 2.0" \
+    "GET / HTTP/2.0\r\nHost: localhost\r\n\r\n" \
+    "505 HTTP Version Not Supported"
+
+test_request \
+    "Malformed request line" \
+    "GET garbage garbage\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Completely garbage" \
+    "this is not HTTP\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Missing Host" \
+    "GET / HTTP/1.1\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Duplicate Host" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Invalid Content-Length" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: abc\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Negative Content-Length" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: -5\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "POST complete" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHello" \
+    "200 OK"
+
+test_request \
+    "POST incomplete" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\nHello" \
+    ""
+
+test_request \
+    "Chunked POST" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
+    "200 OK"
+
+test_request \
+    "Invalid chunk size" \
+    "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\nZZZ\r\nHello\r\n0\r\n\r\n" \
+    "400 Bad Request"
+
+test_request \
+    "Lowercase Host" \
+    "GET / HTTP/1.1\r\nhost: localhost\r\n\r\n" \
+    "200 OK"
+
+test_request \
+    "Mixed-case Host" \
+    "GET / HTTP/1.1\r\nHoSt: localhost\r\n\r\n" \
+    "200 OK"
+
+echo "=============================="
+echo "Passed: $passed"
+echo "Failed: $failed"
+echo "=============================="

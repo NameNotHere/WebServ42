@@ -49,7 +49,7 @@ public:
 	// Request Line
 	RequestStatus parseHttpRequest(const std::string& request);
 	RequestStatus requestLine(const std::string& request);
-	bool checkMethod(const std::string& request);
+	RequestStatus checkMethod(const std::string& request);
 	bool checkTarget(const std::string& request);
 	bool checkVersion(const std::string& request);
 	bool validChar(const std::string& method);
