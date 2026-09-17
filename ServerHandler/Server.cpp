@@ -213,19 +213,19 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
                 response = Response::create(405, "");
 
-            if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
+            else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
                 response = Response::create(400, "");
 
-            if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
+            else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
                 response = Response::create(505, "");
 
-            if (status == HttpParser::REQUEST_HEADER_INVALID)
+            else if (status == HttpParser::REQUEST_HEADER_INVALID)
                 response = Response::create(400, "");
 
-            if (status == HttpParser::REQUEST_BODY_INVALID)
+            else if (status == HttpParser::REQUEST_BODY_INVALID)
                 response = Response::create(400, "");
 
-            if (status == HttpParser::REQUEST_INVALID)
+            else if (status == HttpParser::REQUEST_INVALID)
                 response = Response::create(400, "");
 
             send(fd, response.c_str(), response.size(), 0);
