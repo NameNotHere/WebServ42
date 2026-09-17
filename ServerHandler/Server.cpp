@@ -190,12 +190,13 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
             size_t requestLen = http.getRequestLength();
 
-            if(http.getMethod() == "post")
-            {
-                Post post;
-                std::string response = post.handleRequest(http);
-                send(fd, response.c_str(), response.size(), 0);
-            }
+            std::string response =
+                "HTTP/1.1 Request accepted\r\n"
+                "Content-Length: 16\r\n"
+                "Connection: close\r\n\r\n"
+                "Hello Webserv!!!";
+
+            send(fd, response.c_str(), response.size(), 0);
 
             reqs[fd].erase(0, requestLen);
             if (reqs[fd].empty())

@@ -1,7 +1,6 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include "../ProcessRequests/Post.hpp"
 #include "../httpParser/HttpParser.hpp"
 #include "../ConfigParser/Configuration.hpp"
 #include <unistd.h>
