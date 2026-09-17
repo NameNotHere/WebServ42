@@ -209,11 +209,12 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
         else
         {
             std::string response;
+
             if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
                 response = Response::create(405, "");
 
             if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
-                response = Response::create(404, "");
+                response = Response::create(400, "");
 
             if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
                 response = Response::create(505, "");
