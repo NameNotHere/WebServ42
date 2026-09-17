@@ -134,6 +134,21 @@ static bool sendFileBody(int clientFd, int fd_in, off_t fileSize)
     return true;
 }
 
+static void handleDelte(std::string filePath)
+{
+    struct stat fileStat;
+    if (stat(filePath.c_str(), &fileStat) != 0 || filePath.find(".."))
+        return buildErrorResponse(404); // Not Found
+    if (S_ISDIR(fileStat.st_mode))
+        return buildErrorResponse(403); // Forbidden (or 409 Conflict)
+    if (access(filePath.c_str(), W_OK) != 0)
+        return buildErrorResponse(403); // Forbidden
+    if (std::unlink(filePath.c_str()) == 0)
+        return buildResponse(204, "");
+    else
+        return buildErrorResponse(500); // Internal Server Error
+}
+
 static bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const std::string& root)
 {
     std::string target = normalizeTarget(http.getTarget());
@@ -191,7 +206,9 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection, 
         keepAlive = (version == "HTTP/1.1");
     closeConnection = !keepAlive;
 
-    if (toLower(http.getMethod()) != "get")
+    if (toLower(http.getMethod()) == "DELETE")
+        return handleDelte(htpp.getTarget()); // dk if this is the correct function
+    else if (toLower(http.getMethod()) != "get")
     {
         std::string resp = makeErrorResponse(405, version, keepAlive, {{"Allow", "GET"}});
         if (sendAll(clientFd, resp.data(), resp.size()) == -1)
