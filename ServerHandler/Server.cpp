@@ -140,7 +140,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
     }
 }
 
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>& clientRoots)
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>&clientRoots)
 {
     while (true)
     {
