@@ -212,7 +212,6 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             if (reqs[fd].empty())
                 return;
 
-            std::cout << "Another request is waiting in the buffer!\n";
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
         {
