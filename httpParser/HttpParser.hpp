@@ -3,25 +3,35 @@
 
 #include <map>
 #include <string>
-#include <iostream>
 #include <unistd.h>
+#include <iostream>
+#include <algorithm>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 class HttpParser {
 private:
+	size_t      _requestLength;
 	std::string _method;
 	std::string _target;
 	std::string _version;
-	size_t _requestLength;
+	std::string _body;
 	std::map<std::string, std::string> _headers;
 
 public:
 	enum RequestStatus
 	{
+		REQUEST_BAD,
 		REQUEST_VALID,
 		REQUEST_INVALID,
-		REQUEST_INCOMPLETE
+		REQUEST_NOT_FOUND,
+		REQUEST_INCOMPLETE,
+		REQUEST_BODY_INVALID,
+		REQUEST_HEADER_INVALID,
+		REQUEST_TARGET_NOT_FOUND,
+		REQUEST_CONTENT_TOO_LARGE,
+		REQUEST_METHOD_NOT_ALLOWED,
+		REQUEST_VERSION_NOT_SUPPORTED
 	};
 
 	enum BodyStatus
@@ -38,13 +48,15 @@ public:
 	
 	// Request Line
 	RequestStatus parseHttpRequest(const std::string& request);
-	bool requestLine(const std::string& request);
-	bool checkMethod(const std::string& request);
-	bool checkTargetAndVersion(const std::string& request);
+	RequestStatus requestLine(const std::string& request);
+	RequestStatus checkMethod(const std::string& request);
+	bool checkTarget(const std::string& request);
+	bool checkVersion(const std::string& request);
 	bool validChar(const std::string& method);
 	const std::string& getMethod() const;
 	const std::string& getTarget() const;
 	const std::string& getVersion() const;
+	const std::string& getBody() const;
 	size_t getRequestLength() const;
 	// Headers
 	bool headers(const std::string& request);
@@ -67,9 +79,8 @@ public:
 
 	// Body
 	BodyStatus body(const std::string& request);
-	bool transferEncoding(const std::string& bodyValue);
-	bool convertBytes(std::string& bytes, size_t& digit, const std::string& value);
-
+	BodyStatus transferEncoding(const std::string& bodyValue, size_t& bodyLength);
+	bool convertBytes(std::string& bytes, size_t& digit);
 };
 
 #endif

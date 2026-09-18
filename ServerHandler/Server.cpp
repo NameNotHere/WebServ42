@@ -125,7 +125,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     if (bytesRead == 0)
                         std::cout << "Client disconnected\n";
                     else
-                        std::cerr << "recv() failed\n";
+                        // std::cerr << "recv() failed\n";
+                        perror("recv");
                     close(fd);
                     reqs.erase(fd);
                     fds.erase(fds.begin() + i);
@@ -148,12 +149,14 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
         HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
         if (status == HttpParser::REQUEST_VALID)
         {
-            std::cout << "REQUEST COMPLETE!\n";
+            std::cout << "REQUEST COMPLETE!\n\n";
 
             size_t requestLen = http.getRequestLength();
-            bool closeConn = false;
-            std::string root = clientRoots.at(fd);
-            (void)buildResponse(http, fd, closeConn, root);
+
+            std::string response = Response::create(200, "Hello Webserv!!!");
+
+            send(fd, response.c_str(), response.size(), 0);
+
             reqs[fd].erase(0, requestLen);
 
             if (closeConn)
@@ -173,10 +176,28 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
             return;
         }
-        else if (status == HttpParser::REQUEST_INVALID)
+        // RESPONSES
+        else
         {
-            std::cout << "REQUEST INVALID!\n";
-            std::string response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            std::string response;
+
+            if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
+                response = Response::create(405, "");
+
+            else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
+                response = Response::create(400, "");
+
+            else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
+                response = Response::create(505, "");
+
+            else if (status == HttpParser::REQUEST_HEADER_INVALID)
+                response = Response::create(400, "");
+
+            else if (status == HttpParser::REQUEST_BODY_INVALID)
+                response = Response::create(400, "");
+
+            else if (status == HttpParser::REQUEST_INVALID)
+                response = Response::create(400, "");
 
             send(fd, response.c_str(), response.size(), 0);
             close(fd);

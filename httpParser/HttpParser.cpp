@@ -1,13 +1,28 @@
 #include "HttpParser.hpp"
 
-// Change return type to Request enum, then if body incomplete return request incomplete to caller
-
 HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
 {
-    if (!requestLine(request))
+    RequestStatus requestStatus = requestLine(request);
+
+    if (requestStatus == REQUEST_BAD)
     {
-        std::cout << "Invalid HTTP Request!\n";
-        return REQUEST_INVALID;
+        std::cout << "Request BAAAAD\n";
+        return REQUEST_BAD;
+    }
+    else if (requestStatus == REQUEST_METHOD_NOT_ALLOWED)
+    {
+        std::cout << "Request Method Not allowed\n";
+        return REQUEST_METHOD_NOT_ALLOWED;
+    }
+    else if (requestStatus == REQUEST_TARGET_NOT_FOUND)
+    {
+        std::cout << "Request Target Not found\n";
+        return REQUEST_TARGET_NOT_FOUND;
+    }
+    else if (requestStatus == REQUEST_VERSION_NOT_SUPPORTED)
+    {
+        std::cout << "Http Version not supported\n";
+        return REQUEST_VERSION_NOT_SUPPORTED;
     }
 
     std::cout << "Valid HTTP Request!\n";
@@ -15,24 +30,24 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
     if (!headers(request))
     {
         std::cout << "Invalid Header\n";
-        return REQUEST_INVALID;
+        return REQUEST_HEADER_INVALID;
     }
 
     std::cout << "Valid Header\n";
 
-    BodyStatus status = body(request);
+    BodyStatus bodyStatus = body(request);
 
-    if (status == BODY_VALID)
+    if (bodyStatus == BODY_VALID)
     {
         std::cout << "Valid Body\n";
         return REQUEST_VALID;
     }
-    else if (status == BODY_INVALID)
+    else if (bodyStatus == BODY_INVALID)
     {
         std::cout << "Invalid Body\n";
-        return REQUEST_INVALID;
+        return REQUEST_BODY_INVALID;
     }
-    else if (status == BODY_INCOMPLETE)
+    else if (bodyStatus == BODY_INCOMPLETE)
     {
         std::cout << "Incomplete Body\n";
         return REQUEST_INCOMPLETE;
@@ -60,6 +75,11 @@ size_t HttpParser::getRequestLength() const
     return _requestLength;
 }
 
+const std::string& HttpParser::getBody() const
+{
+	return _body;
+}
+
 const std::map<std::string, std::string>& HttpParser::getHeaders() const
 {
     return _headers;
@@ -68,7 +88,7 @@ const std::map<std::string, std::string>& HttpParser::getHeaders() const
 HttpParser::HttpParser() : _requestLength(0){}
 
 HttpParser::HttpParser(const HttpParser& other)
-	: _method(other._method), _target(other._target), _version(other._version), _requestLength(other._requestLength){}
+    : _requestLength(other._requestLength), _method(other._method), _target(other._target), _version(other._version){}
 
 HttpParser& HttpParser::operator=(const HttpParser& other)
 {

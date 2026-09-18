@@ -11,38 +11,46 @@ bool HttpParser::checkHost(const std::string& value)
 		return false;
 
 	size_t colon = value.find(":");
+
 	if(colon == std::string::npos)
-		return false;
-
-	std::string hostname = value.substr(0, colon);
-	if(hostname.empty())
-		return false;
-
-	for(size_t i = 0; i < hostname.size(); i++)
 	{
-		if(!isalnum(hostname[i]) && hostname[i] != '.' && hostname[i] != '-')
-			return false;
+		for(size_t i = 0; i < value.size(); i++)
+		{
+			if(!isalnum(value[i]) && value[i] != '.' && value[i] != '-')
+				return false;
+		}
 	}
-
-	std::string port = value.substr(colon + 1);
-	if(port.empty())
-		return false;
-
-	for(size_t i = 0; i < port.size(); i++)
+	else
 	{
-		if(!isdigit(port[i]))
+		std::string hostname = value.substr(0, colon);
+		if(hostname.empty())
 			return false;
-	}
 
-	try
-	{
-		int portnum = stoi(port);
-		if(portnum > 65535) // Max TCP range
+		for(size_t i = 0; i < hostname.size(); i++)
+		{
+			if(!isalnum(hostname[i]) && hostname[i] != '.' && hostname[i] != '-')
+				return false;
+		}
+
+		std::string port = value.substr(colon + 1);
+		if(port.empty())
 			return false;
-	}
-	catch(const std::exception& e)
-	{
-		return false;
+
+		for(size_t i = 0; i < port.size(); i++)
+		{
+			if(!isdigit(port[i]))
+				return false;
+		}
+		try
+		{
+			int portnum = stoi(port);
+			if(portnum > 65535) // Max TCP range
+				return false;
+		}
+		catch(const std::exception& e)
+		{
+			return false;
+		}
 	}
 	return true;
 }
