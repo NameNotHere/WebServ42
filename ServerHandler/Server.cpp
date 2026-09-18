@@ -178,15 +178,6 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
             reqs[fd].erase(0, requestLen);
 
-            if (closeConn)
-            {
-                close(fd);
-                reqs.erase(fd);
-                fds.erase(fds.begin() + i);
-                i--;
-                std::cout << "Client disconnected\n";
-                return;
-            }
             if (reqs[fd].empty())
                 return;
         }
