@@ -255,8 +255,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             std::cout << "Client disconnected\n";
             return;
         }
-        std::cout << "Accumulated request:\n"
-                << reqs[fd] << "\n";
+        std::cout << "Accumulated request:\n" << reqs[fd] << "\n";
     }
     return;
 }
