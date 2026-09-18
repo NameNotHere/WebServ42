@@ -3,7 +3,7 @@
 void Init(Server& server)
 {
     server.serverFD = socket(AF_INET, SOCK_STREAM, 0);
-    int opt = 1; // option for setsockopt
+    int opt = 1;
 
 
     if (server.serverFD == -1)
@@ -37,36 +37,6 @@ void Init(Server& server)
     std::cout << "Listening on port " << server.conf.listen << std::endl;
 }
 
-void print_config(const std::vector<ServerConfig>& servers)
-{
-    for (const ServerConfig& server : servers)
-    {
-        std::cout << "Server\n";
-        std::cout << "  name: " << server.name << '\n';
-        std::cout << "  listen: " << server.listen << '\n';
-        std::cout << "  root: " << server.root << '\n';
-        std::cout << "\t\tErrors: \n" ;
-        for (auto &[key, value] : server.errors)
-            std::cout << " \t" << key << " : " << value << '\n';
-        std::cout << "\nallowed methods:";
-        for (const ALLOWED_METHODS& method : server.allowed_methods)
-            std::cout << ' ' << method;
-        std::cout << '\n';
-
-        for (const LocationConfig& location : server.locations)
-        {
-            std::cout << "\tLocation: " << location.path << '\n';
-            std::cout << "\troot: " << location.root << '\n';
-
-            std::cout << "    allowed methods:";
-            for (const std::string& method : location.allowed_methods)
-                std::cout << ' ' << method;
-            std::cout << '\n';
-        }
-    }
-}
-
-// Create pollfd entries for all listening sockets
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
 {
     std::vector<pollfd> fds;
@@ -79,11 +49,10 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
         p.revents = 0;
         fds.push_back(p);
     }
-
     return fds;
 }
 
-void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds)
+void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
 {
     sockaddr_in clientAddr;
     pollfd client;
@@ -96,22 +65,25 @@ void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<
         std::cerr << "accept() failed\n";
         return;
     }
-
     if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
     {
         std::cerr << "inet_ntop() failed\n";
         close(clientFD);
         return;
     }
+
     client.fd = clientFD;
     client.events = POLLIN;
     client.revents = 0;
+    clientRoots[clientFD] = config.root;
     fds.push_back(client);
     std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs)
 {
+    std::map<int, std::string> clientRoots;
+
     while (true)
     {
         int ready = poll(fds.data(), fds.size(), -1);
@@ -129,7 +101,6 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
             // Check whether this FD is one of our listening sockets
             bool isListeningSocket = false;
             size_t serverIndex = 0;
-
             for (size_t j = 0; j < hosting.size(); ++j)
             {
                 if (fds[i].fd == hosting[j].serverFD)
@@ -139,9 +110,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     break;
                 }
             }
-
             if (isListeningSocket)
-                handleNewConnection(fds[i].fd, hosting[serverIndex].conf, fds);
+                handleNewConnection(fds[i].fd, hosting[serverIndex].conf, fds, clientRoots);
             else
             {
                 // This is a client socket.
@@ -164,26 +134,19 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
-                runHttpParser(fd, i, reqs, fds);
+                runHttpParser(fd, i, reqs, fds, clientRoots);
             }
         }
     }
 }
 
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds)
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>& clientRoots)
 {
     while (true)
     {
-        if (reqs[fd].find("\r\n\r\n") == std::string::npos)
-        {
-            std::cout << "REQUEST INCOMPLETE\n";
-            return;
-        }
         HttpParser http;
 
-        HttpParser::RequestStatus status =
-            http.parseHttpRequest(reqs[fd]);
-
+        HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
         if (status == HttpParser::REQUEST_VALID)
         {
             std::cout << "REQUEST COMPLETE!\n\n";
@@ -195,10 +158,18 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             send(fd, response.c_str(), response.size(), 0);
 
             reqs[fd].erase(0, requestLen);
+
+            if (closeConn)
+            {
+                close(fd);
+                reqs.erase(fd);
+                fds.erase(fds.begin() + i);
+                i--;
+                std::cout << "Client disconnected\n";
+                return;
+            }
             if (reqs[fd].empty())
                 return;
-
-            std::cout << "Another request is waiting in the buffer!\n";
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
         {
@@ -229,7 +200,6 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
                 response = Response::create(400, "");
 
             send(fd, response.c_str(), response.size(), 0);
-
             close(fd);
             reqs.erase(fd);
             fds.erase(fds.begin() + i);
@@ -238,8 +208,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             std::cout << "Client disconnected\n";
             return;
         }
-        std::cout << "Accumulated request:\n"
-                << reqs[fd] << "\n";
+        std::cout << "Accumulated request:\n" << reqs[fd] << "\n";
     }
     return;
 }
