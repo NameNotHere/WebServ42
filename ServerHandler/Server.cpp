@@ -176,6 +176,20 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
     {
         if (reqs[fd].find("\r\n\r\n") == std::string::npos)
         {
+            // Might be too agressive, maybe helper fucntion required
+            if (reqs[fd].find('\n') != std::string::npos ||
+                reqs[fd].find('\r') != std::string::npos)
+            {
+                std::string response = Response::create(400, "");
+                send(fd, response.c_str(), response.size(), 0);
+
+                close(fd);
+                reqs.erase(fd);
+                fds.erase(fds.begin() + i);
+                i--;
+
+                return;
+            }
             std::cout << "REQUEST INCOMPLETE\n";
             return;
         }
@@ -212,6 +226,9 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
 
             if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
                 response = Response::create(405, "");
+
+            else if (status == HttpParser::REQUEST_BAD)
+                response = Response::create(400, "");
 
             else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
                 response = Response::create(400, "");
