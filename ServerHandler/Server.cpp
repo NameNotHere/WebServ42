@@ -209,9 +209,9 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
             send(fd, response.c_str(), response.size(), 0);
 
             reqs[fd].erase(0, requestLen);
+
             if (reqs[fd].empty())
                 return;
-
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
         {
