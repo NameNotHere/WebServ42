@@ -134,13 +134,13 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
-                runHttpParser(fd, i, reqs, fds, clientRoots);
+                runHttpParser(fd, i, reqs, fds);
             }
         }
     }
 }
 
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>&clientRoots)
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds)
 {
     while (true)
     {
