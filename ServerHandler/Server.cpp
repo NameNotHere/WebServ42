@@ -7,9 +7,7 @@ void Init(Server& server)
 
     if (server.serverFD == -1)
         throw std::runtime_error("socket() failed");
-
-    if (setsockopt(server.serverFD, SOL_SOCKET, SO_REUSEADDR,
-                   &opt, sizeof(opt)) == -1)
+    if (setsockopt(server.serverFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
     {
         close(server.serverFD);
         server.serverFD = -1;
@@ -18,7 +16,6 @@ void Init(Server& server)
 
     sockaddr_in address;
     std::memset(&address, 0, sizeof(address));
-
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
     address.sin_port = htons(server.conf.listen);
@@ -141,36 +138,32 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
     client.events = POLLIN;
     client.revents = 0;
     clientRoots[clientFD] = config.root;
-
     fds.push_back(client);
 }
 
 void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
 {
     bool keepAlive = true;
+    HttpParser http;
 
     while (true)
     {
         if (reqs[fd].find("\r\n\r\n") == std::string::npos)
         {
-            // Might be too agressive, maybe helper fucntion required
-            if (reqs[fd].find('\n') != std::string::npos ||
-                reqs[fd].find('\r') != std::string::npos)
+            if (reqs[fd].find('\n') != std::string::npos || reqs[fd].find('\r') != std::string::npos)
             {
                 std::string response = Response::create(400, "");
                 send(fd, response.c_str(), response.size(), 0);
-
                 close(fd);
                 reqs.erase(fd);
                 fds.erase(fds.begin() + i);
                 i--;
-
                 return;
             }
             std::cout << "REQUEST INCOMPLETE\n";
             return;
         }
-        HttpParser http;
+
         HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
         if (status == HttpParser::REQUEST_VALID)
         {
