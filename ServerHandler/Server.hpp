@@ -36,7 +36,7 @@ void Init(Server& server);
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
 void handleNewConnection (int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots);
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>& clientRoots);
+void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds,  std::map<int, std::string>& clientRoots);
 std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {});
 bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code);
 std::string statusText(int code);
