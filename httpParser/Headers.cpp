@@ -20,12 +20,15 @@ bool HttpParser::headers(const std::string& request)
 			return false;
 		
 		std::string name = header.substr(0, colon);
+
+		if(name.empty())
+			return false;
+
 		std::string value = header.substr(colon + 1);
 
 		if(!validChar(name))
 			return false;
 
-		// Trim white space from both ends
 		ftTrim(value);
 
 		if (!checkFieldValue(value))
