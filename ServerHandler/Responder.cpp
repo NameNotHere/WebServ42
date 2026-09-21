@@ -101,7 +101,7 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection, 
         keepAlive = (version == "HTTP/1.1");
     closeConnection = !keepAlive;
 
-    if (toLower(http.getMethod()) == "DELETE")
+    if (toLower(http.getMethod()) == "delete")
         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
     else if (toLower(http.getMethod()) != "get")
     {

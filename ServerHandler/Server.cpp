@@ -5,10 +5,11 @@ void Init(Server& server)
     server.serverFD = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
 
-
     if (server.serverFD == -1)
         throw std::runtime_error("socket() failed");
-    if (setsockopt(server.serverFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
+
+    if (setsockopt(server.serverFD, SOL_SOCKET, SO_REUSEADDR,
+                   &opt, sizeof(opt)) == -1)
     {
         close(server.serverFD);
         server.serverFD = -1;
@@ -17,6 +18,7 @@ void Init(Server& server)
 
     sockaddr_in address;
     std::memset(&address, 0, sizeof(address));
+
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
     address.sin_port = htons(server.conf.listen);
@@ -33,54 +35,30 @@ void Init(Server& server)
         server.serverFD = -1;
         throw std::runtime_error("listen() failed");
     }
-
     std::cout << "Listening on port " << server.conf.listen << std::endl;
 }
 
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
 {
     std::vector<pollfd> fds;
+
     fds.reserve(hosting.size());
+
     for (size_t i = 0; i < hosting.size(); ++i)
     {
         pollfd p;
+
         p.fd = hosting[i].serverFD;
         p.events = POLLIN;
         p.revents = 0;
+
         fds.push_back(p);
     }
+
     return fds;
 }
 
-void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
-{
-    sockaddr_in clientAddr;
-    pollfd client;
-    char ip[INET_ADDRSTRLEN];
-
-    socklen_t addrlen = sizeof(clientAddr);
-    int clientFD = accept(serverFD, reinterpret_cast<sockaddr*>(&clientAddr), &addrlen);
-    if (clientFD == -1)
-    {
-        std::cerr << "accept() failed\n";
-        return;
-    }
-    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
-    {
-        std::cerr << "inet_ntop() failed\n";
-        close(clientFD);
-        return;
-    }
-
-    client.fd = clientFD;
-    client.events = POLLIN;
-    client.revents = 0;
-    clientRoots[clientFD] = config.root;
-    fds.push_back(client);
-    std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
-}
-
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs)
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string>& reqs)
 {
     std::map<int, std::string> clientRoots;
 
@@ -97,10 +75,9 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
         {
             if (!(fds[i].revents & POLLIN))
                 continue;
-
-            // Check whether this FD is one of our listening sockets
             bool isListeningSocket = false;
             size_t serverIndex = 0;
+
             for (size_t j = 0; j < hosting.size(); ++j)
             {
                 if (fds[i].fd == hosting[j].serverFD)
@@ -111,26 +88,24 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                 }
             }
             if (isListeningSocket)
-                handleNewConnection(fds[i].fd, hosting[serverIndex].conf, fds, clientRoots);
+                handleNewConnection( fds[i].fd,hosting[serverIndex].conf,fds,clientRoots);
             else
             {
-                // This is a client socket.
-                // For now, just demonstrate that data is available.
                 int fd = fds[i].fd;
                 char buffer[4096];
-                ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
+                ssize_t bytesRead = recv( fd, buffer, sizeof(buffer), 0);
 
                 if (bytesRead <= 0)
                 {
                     if (bytesRead == 0)
                         std::cout << "Client disconnected\n";
                     else
-                        // std::cerr << "recv() failed\n";
-                        perror("recv");
+                        std::cerr << "recv() failed\n";
                     close(fd);
                     reqs.erase(fd);
+                    clientRoots.erase(fd);
                     fds.erase(fds.begin() + i);
-                    i--;
+                    --i;
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
@@ -140,31 +115,57 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
     }
 }
 
-void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vector<pollfd>& fds, const std::map<int, std::string>& clientRoots)
+
+void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
 {
+    sockaddr_in clientAddr;
+    pollfd client;
+    char ip[INET_ADDRSTRLEN];
+
+    socklen_t addrlen = sizeof(clientAddr);
+
+    int clientFD = accept(serverFD,reinterpret_cast<sockaddr*>(&clientAddr),&addrlen);
+    if (clientFD == -1)
+    {
+        std::cerr << "accept() failed\n";
+        return;
+    }
+    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
+    {
+        std::cerr << "inet_ntop() failed\n";
+        close(clientFD);
+        return;
+    }
+
+    client.fd = clientFD;
+    client.events = POLLIN;
+    client.revents = 0;
+    clientRoots[clientFD] = config.root;
+
+    fds.push_back(client);
+}
+
+void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
+{
+    bool keepAlive = true;
+
     while (true)
     {
         HttpParser http;
-
         HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
         if (status == HttpParser::REQUEST_VALID)
         {
-            std::cout << "REQUEST COMPLETE!\n\n";
-
             size_t requestLen = http.getRequestLength();
-
-            std::string response = Response::create(200, "Hello Webserv!!!");
-
-            send(fd, response.c_str(), response.size(), 0);
-
+            buildResponse( http, fd, keepAlive, clientRoots.at(fd));
             reqs[fd].erase(0, requestLen);
 
-            if (closeConn)
+            if (!keepAlive)
             {
                 close(fd);
                 reqs.erase(fd);
+                clientRoots.erase(fd);
                 fds.erase(fds.begin() + i);
-                i--;
+                --i;
                 std::cout << "Client disconnected\n";
                 return;
             }
@@ -172,43 +173,30 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string> &reqs, std::vec
                 return;
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
-        {
-            std::cout << "REQUEST INCOMPLETE, WAITING FOR MORE DATA!\n";
             return;
-        }
-        // RESPONSES
         else
         {
             std::string response;
 
             if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
                 response = Response::create(405, "");
-
             else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
                 response = Response::create(400, "");
-
             else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
                 response = Response::create(505, "");
-
             else if (status == HttpParser::REQUEST_HEADER_INVALID)
                 response = Response::create(400, "");
-
             else if (status == HttpParser::REQUEST_BODY_INVALID)
                 response = Response::create(400, "");
-
             else if (status == HttpParser::REQUEST_INVALID)
                 response = Response::create(400, "");
-
-            send(fd, response.c_str(), response.size(), 0);
+            send( fd, response.c_str(), response.size(), 0);
             close(fd);
             reqs.erase(fd);
+            clientRoots.erase(fd);
             fds.erase(fds.begin() + i);
-            i--;
-
-            std::cout << "Client disconnected\n";
+            --i;
             return;
         }
-        std::cout << "Accumulated request:\n" << reqs[fd] << "\n";
     }
-    return;
 }
