@@ -47,7 +47,7 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 			return BODY_INCOMPLETE;
 		}
 		_requestLength = start + 4 + contentLength;
-		_body = body;
+		_body = body.substr(0, contentLength);
 		std::cout << "Content-Length body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
