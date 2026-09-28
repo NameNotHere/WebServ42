@@ -2,6 +2,14 @@
 
 HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
 {
+    // This could solve some bugs in the future 
+    // _headers.clear();
+    // _body.clear();
+    // _method.clear();
+    // _target.clear();
+    // _version.clear();
+    // _requestLength = 0;
+
     RequestStatus requestStatus = requestLine(request);
 
     if (requestStatus == REQUEST_BAD)

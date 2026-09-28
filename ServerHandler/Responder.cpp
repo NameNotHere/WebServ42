@@ -84,12 +84,12 @@ bool sendFileBody(int clientFd, int fd_in, off_t fileSize)
     return true;
 }
 
-bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection, const std::string& root)
+bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const std::string& root)
 {
     std::string version = http.getVersion();
 
     std::string connLower = toLower(findHeaderValue(http.getHeaders(), "Connection"));
-    bool keepAlive;
+
     if (!connLower.empty())
         if (connLower.find("close") != std::string::npos)
             keepAlive = false;
@@ -99,10 +99,10 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection, 
             keepAlive = (version == "HTTP/1.1");
     else
         keepAlive = (version == "HTTP/1.1");
-    closeConnection = !keepAlive;
 
     if (toLower(http.getMethod()) == "delete")
         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+
     else if (toLower(http.getMethod()) != "get")
     {
         std::string resp = makeErrorResponse(405, version, keepAlive, {{"Allow", "GET"}});

@@ -55,6 +55,35 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
     return fds;
 }
 
+void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
+{
+    sockaddr_in clientAddr;
+    pollfd client;
+    char ip[INET_ADDRSTRLEN];
+
+    socklen_t addrlen = sizeof(clientAddr);
+
+    int clientFD = accept(serverFD,reinterpret_cast<sockaddr*>(&clientAddr),&addrlen);
+    if (clientFD == -1)
+    {
+        std::cerr << "accept() failed\n";
+        return;
+    }
+    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
+    {
+        std::cerr << "inet_ntop() failed\n";
+        close(clientFD);
+        return;
+    }
+
+    client.fd = clientFD;
+    client.events = POLLIN;
+    client.revents = 0;
+    clientRoots[clientFD] = config.root;
+    fds.push_back(client);
+    std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
+}
+
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string>& reqs)
 {
     std::map<int, std::string> clientRoots;
@@ -112,35 +141,6 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
     }
 }
 
-
-void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
-{
-    sockaddr_in clientAddr;
-    pollfd client;
-    char ip[INET_ADDRSTRLEN];
-
-    socklen_t addrlen = sizeof(clientAddr);
-
-    int clientFD = accept(serverFD,reinterpret_cast<sockaddr*>(&clientAddr),&addrlen);
-    if (clientFD == -1)
-    {
-        std::cerr << "accept() failed\n";
-        return;
-    }
-    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
-    {
-        std::cerr << "inet_ntop() failed\n";
-        close(clientFD);
-        return;
-    }
-
-    client.fd = clientFD;
-    client.events = POLLIN;
-    client.revents = 0;
-    clientRoots[clientFD] = config.root;
-    fds.push_back(client);
-}
-
 void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
 {
     bool keepAlive = true;
@@ -168,12 +168,8 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
         if (status == HttpParser::REQUEST_VALID)
         {
             size_t requestLen = http.getRequestLength();
-            // buildResponse( http, fd, keepAlive, clientRoots.at(fd));
 
-            bool result = buildResponse(http, fd, keepAlive, clientRoots.at(fd));
-            std::cout << "buildResponse result: " << result
-                    << " | keepAlive: " << keepAlive << "\n";
-
+            buildResponse( http, fd, keepAlive, clientRoots.at(fd));
             reqs[fd].erase(0, requestLen);
 
             if (!keepAlive)
