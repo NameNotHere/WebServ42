@@ -103,12 +103,5 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const 
     if (toLower(http.getMethod()) == "delete")
         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
 
-    else if (toLower(http.getMethod()) != "get")
-    {
-        std::string resp = makeErrorResponse(405, version, keepAlive, {{"Allow", "GET"}});
-        if (sendAll(clientFd, resp.data(), resp.size()) == -1)
-            return false;
-        return true;
-    }
     return handleGet(http, version, keepAlive, clientFd, root);
 }

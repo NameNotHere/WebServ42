@@ -135,6 +135,9 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
+                std::cout << "Accumulated request:\n"
+                          << reqs[fd]
+                          << "\n--- end request buffer ---\n";
                 runHttpParser(fd, i, reqs, fds, clientRoots);
             }
         }
@@ -168,9 +171,11 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
         if (status == HttpParser::REQUEST_VALID)
         {
             size_t requestLen = http.getRequestLength();
+            std::cout << "Request Length:" << requestLen << "\n";
 
             buildResponse( http, fd, keepAlive, clientRoots.at(fd));
             reqs[fd].erase(0, requestLen);
+            std::cout << "Reqs[fd]" << reqs[fd] << "\n";
 
             if (!keepAlive)
             {
