@@ -72,7 +72,7 @@ void expect_and_increase(const std::vector<Token>& tokens,
 
     if (tokens[pos].type != expected)
         throw std::runtime_error(
-            "unexpected token at line " + tokens[pos].line
+            std::string("unexpected token at line ")
             + std::to_string(tokens[pos].line)
         );
 
