@@ -175,7 +175,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
 
             buildResponse( http, fd, keepAlive, clientRoots.at(fd));
             reqs[fd].erase(0, requestLen);
-            std::cout << "Reqs[fd]" << reqs[fd] << "\n";
+            // std::cout << "Reqs[fd]:" << reqs[fd] << "\n";
 
             if (!keepAlive)
             {
