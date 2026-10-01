@@ -45,9 +45,12 @@ std::string normalizeTarget(const std::string& rawTarget)
 {
     std::string target = rawTarget;
     const size_t qpos = target.find('?');
+    const size_t hashPos = target.find('#');
 
     if (qpos != std::string::npos)
         target = target.substr(0, qpos);
+    if (hashPos != std::string::npos)
+        target = target.substr(0, hashPos);
     if (target.empty() || target[0] != '/')
         target = "/" + target;
     return target;
