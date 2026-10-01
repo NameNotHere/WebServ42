@@ -29,20 +29,23 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 	if(!validChar(method))
 		return REQUEST_BAD;
 
-	lowerCase(method);
-	if (method != "get"    &&
-		method != "head"   &&
-		method != "post"   &&
-		method != "put"    &&
-		method != "delete" &&
-		method != "options"&&
-		method != "trace"  &&
-		method != "connect"&&
-		method != "patch"   )
+	std::string lowerMethod = method;
+	lowerCase(lowerMethod);
+
+	if (lowerMethod != "get"    &&
+		lowerMethod != "head"   &&
+		lowerMethod != "post"   &&
+		lowerMethod != "put"    &&
+		lowerMethod != "delete" &&
+		lowerMethod != "options"&&
+		lowerMethod != "trace"  &&
+		lowerMethod != "connect"&&
+		lowerMethod != "patch"   )
 		return REQUEST_BAD;
-	if (method != "get"    &&
-		method != "post"   &&
-		method != "delete"  )
+
+	if (lowerMethod != "get"    &&
+		lowerMethod != "post"   &&
+		lowerMethod != "delete"  )
 		return  REQUEST_METHOD_NOT_ALLOWED;
 	
 	_method = method;

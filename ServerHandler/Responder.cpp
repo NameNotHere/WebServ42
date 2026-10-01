@@ -103,8 +103,15 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const 
     else
         keepAlive = (version == "HTTP/1.1");
 
-    if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+    if (toLower(http.getMethod()) == "get")
+        return handleGet(http, version, keepAlive, clientFd, root);
 
-    return handleGet(http, version, keepAlive, clientFd, root);
+    else if (toLower(http.getMethod()) == "post")
+    //THIS IS WHERE WE CAN INSERT CGI 
+    //INSTEAD OF HANDLE GET FOR "POST"
+    //WE CALL "HANDLE POST AND THE CGI WILL BE IN THERE"
+        return handleGet(http, version, keepAlive, clientFd, root);
+
+    else if (toLower(http.getMethod()) == "delete")
+        return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
 }
