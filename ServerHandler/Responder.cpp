@@ -114,4 +114,5 @@ bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const 
 
     else if (toLower(http.getMethod()) == "delete")
         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+    return false;
 }
