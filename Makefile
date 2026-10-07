@@ -21,6 +21,9 @@ SRCS		= httpParser/HttpParser.cpp \
 			  ServerHandler/HandleDelete.cpp \
 			  ServerHandler/Responder.cpp \
 			  ServerHandler/ServerErrors.cpp \
+			  www/cgi/CgiHandler.cpp \
+			  www/cgi/CgiHelper.cpp \
+			  www/cgi/CgiResponse.cpp \
 			  main.cpp
 
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)

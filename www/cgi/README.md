@@ -8,5 +8,6 @@ Need to add HTTP routing map URLs (script_name, script_path and PATH_INFO)
 CGI configuration still confusing to me ngl
 CgiResponse is not converted into servers HTTP because I don't know it
 HEAD and redirects still need to be worked on, will have to look more into that as well
+Add 
 
 Ofcourse debugging because I tried to do the logic part myself but ofcourse also used quite a bit of AI

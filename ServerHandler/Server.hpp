@@ -4,6 +4,8 @@
 #include "../Response/Response.hpp"
 #include "../httpParser/HttpParser.hpp"
 #include "../ConfigParser/Configuration.hpp"
+#include "../www/cgi/CgiHandler.hpp"
+#include "../www/cgi/CgiResponse.hpp"
 #include <unistd.h>
 #include <iostream>
 #include <poll.h>
