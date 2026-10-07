@@ -168,7 +168,6 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
         if (status == HttpParser::REQUEST_VALID)
         {
             size_t requestLen = http.getRequestLength();
-
             buildResponse( http, fd, keepAlive, clientRoots.at(fd));
             reqs[fd].erase(0, requestLen);
 

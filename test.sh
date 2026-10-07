@@ -101,7 +101,7 @@ test_request \
 
 test_request \
     "Nested target" \
-    "GET /foo/bar/baz HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "GET /foo/bar/baz.html HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "200 OK"
 
 test_request \

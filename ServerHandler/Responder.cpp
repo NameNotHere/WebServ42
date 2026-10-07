@@ -45,9 +45,12 @@ std::string normalizeTarget(const std::string& rawTarget)
 {
     std::string target = rawTarget;
     const size_t qpos = target.find('?');
+    const size_t hashPos = target.find('#');
 
     if (qpos != std::string::npos)
         target = target.substr(0, qpos);
+    if (hashPos != std::string::npos)
+        target = target.substr(0, hashPos);
     if (target.empty() || target[0] != '/')
         target = "/" + target;
     return target;
@@ -191,16 +194,18 @@ bool buildResponse(const HttpParser& http, int clientFd,
         return sendAll(clientFd, output.data(), output.size()) != -1;
     }
 
-    if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive,
-                            http.getTarget(), root);
+    //THIS IS WHERE WE CAN INSERT CGI
+    //(if isCgi(http.getTarget()))
+    //  retrun handleCgi();
+    /*else if*/if (toLower(http.getMethod()) == "get")
+        return handleGet(http, version, keepAlive, clientFd, root);
 
-    if (toLower(http.getMethod()) != "get")
-    {
-        std::string response = makeErrorResponse(
-            405, version, keepAlive, {{"Allow", "GET"}});
-        return sendAll(clientFd, response.data(), response.size()) != -1;
-    }
+    else if (toLower(http.getMethod()) == "post")
+    //INSTEAD OF HANDLE GET FOR "POST"
+    //WE CALL "HANDLE POST"
+        return handleGet(http, version, keepAlive, clientFd, root);
 
-    return handleGet(http, version, keepAlive, clientFd, root);
+    else if (toLower(http.getMethod()) == "delete")
+        return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+    return false;
 }
