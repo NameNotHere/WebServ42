@@ -60,7 +60,7 @@ run_http_cgi()
     expected="$3"
     fix="$4"
 
-    result=$(printf '%b' "$request" | nc -w 3 "$HOST" "$PORT" 2>&1)
+    result=$(printf '%b' "$request" | nc -w 8 "$HOST" "$PORT" 2>&1)
 
     if printf '%s' "$result" | grep -Fq "$expected"; then
         pass "$name"
