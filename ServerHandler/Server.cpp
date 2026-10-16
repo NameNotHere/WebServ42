@@ -190,12 +190,12 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
         {
             std::string response;
 
-            if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED)
-                response = Response::create(501, "");
+            if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED)
+                response = Response::create(405, "");
             else if (status == HttpParser::REQUEST_BAD)
                 response = Response::create(400, "");
             else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND)
-                response = Response::create(400, "");
+                response = Response::create(404, "");
             else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED)
                 response = Response::create(505, "");
             else if (status == HttpParser::REQUEST_HEADER_INVALID)

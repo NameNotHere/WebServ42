@@ -4,8 +4,8 @@ HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 {
 	if (checkMethod(request) == REQUEST_BAD)
 		return REQUEST_BAD;
-	else if (checkMethod(request) == REQUEST_METHOD_NOT_IMPLEMENTED)
-		return REQUEST_METHOD_NOT_IMPLEMENTED;
+	else if (checkMethod(request) == REQUEST_METHOD_NOT_ALLOWED)
+		return REQUEST_METHOD_NOT_ALLOWED;
 
 	if (!checkTarget(request))
 		return REQUEST_TARGET_NOT_FOUND;
@@ -35,7 +35,7 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 	if (lowerMethod != "get"    &&
 		lowerMethod != "post"   &&
 		lowerMethod != "delete"  )
-		return  REQUEST_METHOD_NOT_IMPLEMENTED;
+		return  REQUEST_METHOD_NOT_ALLOWED;
 	
 	_method = method;
 	return REQUEST_VALID;

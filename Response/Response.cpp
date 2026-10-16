@@ -8,8 +8,8 @@ std::string Response::statusMsg(int statusCode)
         return "Bad Request";
     else if (statusCode == 404)
         return "Not Found";
-    else if (statusCode == 501)
-        return "Method Not Implemented";
+    else if (statusCode == 405)
+        return "Method Not Allowed";
 	else if (statusCode == 413)
     	return "Content Too Large";
     else if (statusCode == 500)
