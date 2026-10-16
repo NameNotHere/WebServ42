@@ -412,7 +412,7 @@ test_http \
 
 test_http \
     "Unknown FOO method" \
-    FOO "/$GET_FILE" 405 "" "" "" "" \
+    FOO "/$GET_FILE" 501 "" "" "" "" \
     "An unsupported method should be rejected rather than treated as GET."
 
 raw_test \

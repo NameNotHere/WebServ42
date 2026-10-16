@@ -4,8 +4,8 @@ HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 {
 	if (checkMethod(request) == REQUEST_BAD)
 		return REQUEST_BAD;
-	else if (checkMethod(request) == REQUEST_METHOD_NOT_ALLOWED)
-		return REQUEST_METHOD_NOT_ALLOWED;
+	else if (checkMethod(request) == REQUEST_METHOD_NOT_IMPLEMENTED)
+		return REQUEST_METHOD_NOT_IMPLEMENTED;
 
 	if (!checkTarget(request))
 		return REQUEST_TARGET_NOT_FOUND;
@@ -33,20 +33,9 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 	lowerCase(lowerMethod);
 
 	if (lowerMethod != "get"    &&
-		lowerMethod != "head"   &&
-		lowerMethod != "post"   &&
-		lowerMethod != "put"    &&
-		lowerMethod != "delete" &&
-		lowerMethod != "options"&&
-		lowerMethod != "trace"  &&
-		lowerMethod != "connect"&&
-		lowerMethod != "patch"   )
-		return REQUEST_BAD;
-
-	if (lowerMethod != "get"    &&
 		lowerMethod != "post"   &&
 		lowerMethod != "delete"  )
-		return  REQUEST_METHOD_NOT_ALLOWED;
+		return  REQUEST_METHOD_NOT_IMPLEMENTED;
 	
 	_method = method;
 	return REQUEST_VALID;
@@ -88,15 +77,16 @@ HttpParser::RequestStatus HttpParser::checkVersion(const std::string& request)
 
 	std::string version = request.substr(secondSpace + 1, 10);
 
-	if(version == "HTTP/0.9\r\n" || version == "HTTP/1.0\r\n"
-	|| version == "HTTP/3\r\n"   || version == "HTTP/2\r\n")
-		return REQUEST_VERSION_NOT_SUPPORTED;
-
-	if(version != "HTTP/1.1\r\n")
+	if (version != "HTTP/1.1\r\n")
+	{
+		if (version.find("HTTP/") == 0 &&
+			version.size() >= 8 &&
+			version.compare(version.size() - 2, 2, "\r\n") == 0)
+		{
+			return REQUEST_VERSION_NOT_SUPPORTED;
+		}
 		return REQUEST_BAD;
-
-	version = request.substr(secondSpace + 1, 8);
-	_version = version;
-
+	}
+	_version = "HTTP/1.1";
 	return REQUEST_VALID;
 }
