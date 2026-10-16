@@ -125,7 +125,7 @@ std::string toUpper(std::string value)
 }
 
 bool buildResponse(const HttpParser& http, int clientFd,
-                   bool& keepAlive, const std::string& root) //new build response, build with AI. Need to change some stuff and make sure it's bullet proof.
+                   bool& keepAlive, const ServerConfig& config) //new build response, build with AI. Need to change some stuff and make sure it's bullet proof.
 {
     std::string version = http.getVersion();
 
@@ -145,7 +145,7 @@ bool buildResponse(const HttpParser& http, int clientFd,
             ? target
             : target.substr(0, queryPosition);
 
-        request.script_path = resolveRequestedPath(root, request.script_name);
+        request.script_path = resolveRequestedPath(config.root, request.script_name);
         request.query_string = queryPosition == std::string::npos
             ? ""
             : target.substr(queryPosition + 1);
@@ -156,7 +156,7 @@ bool buildResponse(const HttpParser& http, int clientFd,
         request.server_protocol = version;
         request.server_name = findHeaderValue(http.getHeaders(), "host");
         request.server_software = "webserv/1.0";
-        request.server_port = "8080";
+        request.server_port = http.getPortNum();
 
         CGIResult result = cgi.execute(request);
 
@@ -195,13 +195,13 @@ bool buildResponse(const HttpParser& http, int clientFd,
     }
 
     if (toLower(http.getMethod()) == "get")
-        return handleGet(http, version, keepAlive, clientFd, root);
+        return handleGet(http, version, keepAlive, clientFd, config.root);
 
     else if (toLower(http.getMethod()) == "post")
-        return handleGet(http, version, keepAlive, clientFd, root);
+        return handlePost(http, version, keepAlive, clientFd, config);
 
     else if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+        return handleDelete(clientFd, version, keepAlive, http.getTarget(), config.root);
 
     return false;
 }

@@ -19,6 +19,7 @@ SRCS		= httpParser/HttpParser.cpp \
 			  Response/Response.cpp \
 			  ServerHandler/HandleGet.cpp \
 			  ServerHandler/HandleDelete.cpp \
+			  ServerHandler/HandlePost.cpp \
 			  ServerHandler/Responder.cpp \
 			  ServerHandler/ServerErrors.cpp \
 			  www/cgi/CgiHandler.cpp \

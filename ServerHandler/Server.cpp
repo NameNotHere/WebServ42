@@ -55,7 +55,7 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
     return fds;
 }
 
-void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
+void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs)
 {
     sockaddr_in clientAddr;
     pollfd client;
@@ -79,14 +79,14 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
     client.fd = clientFD;
     client.events = POLLIN;
     client.revents = 0;
-    clientRoots[clientFD] = config.root;
+    clientConfigs[clientFD] = config;
     fds.push_back(client);
     std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string>& reqs)
 {
-    std::map<int, std::string> clientRoots;
+    std::map<int, ServerConfig> clientConfigs;
 
     while (true)
     {
@@ -114,7 +114,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                 }
             }
             if (isListeningSocket)
-                handleNewConnection( fds[i].fd,hosting[serverIndex].conf,fds,clientRoots);
+                handleNewConnection( fds[i].fd,hosting[serverIndex].conf,fds,clientConfigs);
             else
             {
                 int fd = fds[i].fd;
@@ -129,19 +129,19 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::m
                         std::cerr << "recv() failed\n";
                     close(fd);
                     reqs.erase(fd);
-                    clientRoots.erase(fd);
+                    clientConfigs.erase(fd);
                     fds.erase(fds.begin() + i);
                     --i;
                     continue;
                 }
                 reqs[fd].append(buffer, bytesRead);
-                runHttpParser(fd, i, reqs, fds, clientRoots);
+                runHttpParser(fd, i, reqs, fds, clientConfigs);
             }
         }
     }
 }
 
-void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, std::string>& clientRoots)
+void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs)
 {
     bool keepAlive = true;
     HttpParser http;
@@ -168,14 +168,14 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
         if (status == HttpParser::REQUEST_VALID)
         {
             size_t requestLen = http.getRequestLength();
-            buildResponse( http, fd, keepAlive, clientRoots.at(fd));
+            buildResponse( http, fd, keepAlive, clientConfigs.at(fd));
             reqs[fd].erase(0, requestLen);
 
             if (!keepAlive)
             {
                 close(fd);
                 reqs.erase(fd);
-                clientRoots.erase(fd);
+                clientConfigs.erase(fd);
                 fds.erase(fds.begin() + i);
                 --i;
                 std::cout << "Client disconnected\n";
@@ -207,7 +207,7 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
             send( fd, response.c_str(), response.size(), 0);
             close(fd);
             reqs.erase(fd);
-            clientRoots.erase(fd);
+            clientConfigs.erase(fd);
             fds.erase(fds.begin() + i);
             --i;
             return;

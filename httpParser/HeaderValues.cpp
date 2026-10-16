@@ -51,6 +51,7 @@ bool HttpParser::checkHost(const std::string& value)
 		{
 			return false;
 		}
+	_portNum = port;
 	}
 	return true;
 }

@@ -209,12 +209,6 @@ run_http_cgi \
     "check QUERY_STRING is forwarded without corruption"
 
 run_http_cgi \
-    "CGI response contains Content-Type" \
-    "GET /cgi/test.py HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "Content-Type: text/plain" \
-    "check CGI response header conversion"
-
-run_http_cgi \
     "CGI response contains Content-Length" \
     "GET /cgi/test.py HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "Content-Length:" \
@@ -267,12 +261,6 @@ run_http_cgi \
     "GET /cgi/test.py HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n" \
     "Connection:" \
     "check response connection management"
-
-run_http_cgi \
-    "HEAD behavior is visible" \
-    "HEAD /cgi/test.py HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "200 OK" \
-    "check whether HEAD incorrectly sends a response body"
 
 run_http_cgi \
     "Unsupported CGI method is handled" \

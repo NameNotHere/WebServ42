@@ -2,14 +2,6 @@
 
 HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
 {
-    // This could solve some bugs in the future 
-    // _headers.clear();
-    // _body.clear();
-    // _method.clear();
-    // _target.clear();
-    // _version.clear();
-    // _requestLength = 0;
-
     RequestStatus requestStatus = requestLine(request);
 
     if (requestStatus == REQUEST_BAD)
@@ -86,6 +78,11 @@ size_t HttpParser::getRequestLength() const
 const std::string& HttpParser::getBody() const
 {
 	return _body;
+}
+
+const std::string& HttpParser::getPortNum() const
+{
+	return _portNum;
 }
 
 const std::map<std::string, std::string>& HttpParser::getHeaders() const
