@@ -194,18 +194,15 @@ bool buildResponse(const HttpParser& http, int clientFd,
         return sendAll(clientFd, output.data(), output.size()) != -1;
     }
 
-    //THIS IS WHERE WE CAN INSERT CGI
-    //(if isCgi(http.getTarget()))
-    //  retrun handleCgi();
-    /*else if*/if (toLower(http.getMethod()) == "get")
+    if (toLower(http.getMethod()) == "get")
         return handleGet(http, version, keepAlive, clientFd, root);
 
     else if (toLower(http.getMethod()) == "post")
-    //INSTEAD OF HANDLE GET FOR "POST"
-    //WE CALL "HANDLE POST"
         return handleGet(http, version, keepAlive, clientFd, root);
 
     else if (toLower(http.getMethod()) == "delete")
         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
+
     return false;
 }
+// might have to toLower() it->first and it->second
