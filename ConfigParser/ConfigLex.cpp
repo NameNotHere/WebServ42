@@ -47,8 +47,7 @@ std::vector<Token> lex(const std::string& text)
         
         j = i;
         while (j < text.size() && 
-        !std::isspace(static_cast<unsigned char>(text[j])) 
-        && text[j] != '{' && text[j] != '}' && text[j] != ';')
+        !std::isspace(static_cast<unsigned char>(text[j])) && text[j] != '{' && text[j] != '}' && text[j] != ';')
             j++;
         tokens.push_back(Token{WORD, text.substr(i, j - i), line});
         i = j;
@@ -57,24 +56,12 @@ std::vector<Token> lex(const std::string& text)
     return tokens;
 }
 
-void expect_and_increase(const std::vector<Token>& tokens,
-                         size_t& pos,
-                         CONF_TOKEN expected)
+void expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOKEN expected)
 {
     if (pos >= tokens.size())
         throw std::runtime_error("unexpected end of file");
-
-    std::cerr << "Expected: " << expected
-              << " | Got: " << tokens[pos].type
-              << " | word: [" << tokens[pos].word << "]"
-              << " | pos: " << pos
-              << std::endl;
-
+    std::cerr << "Expected: " << expected << " | Got: " << tokens[pos].type << " | word: [" << tokens[pos].word << "]" << " | pos: " << pos << std::endl;
     if (tokens[pos].type != expected)
-        throw std::runtime_error(
-            std::string("unexpected token at line ")
-            + std::to_string(tokens[pos].line)
-        );
-
+        throw std::runtime_error( std::string("unexpected token at line ") + std::to_string(tokens[pos].line));
     pos++;
 }
