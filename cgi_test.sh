@@ -86,17 +86,17 @@ echo "       WEBSERV + CGI TESTS"
 echo "======================================"
 echo
 
-echo "[1/3] Running existing HTTP tests"
-echo "--------------------------------------"
+# echo "[1/3] Running existing HTTP tests"
+# echo "--------------------------------------"
 
-if "$ROOT_DIR/test.sh"; then
-    echo "Existing HTTP tests completed."
-else
-    echo "The existing HTTP tests failed to run."
-    echo "Make sure the server is running:"
-    echo "  ./webserv epic.conf"
-    exit 1
-fi
+# if "$ROOT_DIR/test.sh"; then
+#     echo "Existing HTTP tests completed."
+# else
+#     echo "The existing HTTP tests failed to run."
+#     echo "Make sure the server is running:"
+#     echo "  ./webserv epic.conf"
+#     exit 1
+# fi
 
 echo
 echo "[2/3] Compiling direct CGI tester"

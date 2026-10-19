@@ -224,21 +224,30 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
         findMatchingLocation(config, http.getTarget());
 
     if (location == NULL)
+    {
+        std::cout << "POST failed: no matching location\n";
         return sendPostResponse(clientFd, version, keepAlive, 404);
+    }
 
-    if (!isPostAllowed(config, *location))
+    if (!isMethodAllowed(config, location, "POST"))
+    {
+        std::cout << "POST failed: method not allowed\n";
         return sendPostResponse(clientFd, version, keepAlive, 405);
+    }
 
     std::string filename;
 
     if (!getUploadFilename(http.getTarget(), *location, filename))
+    {
+        std::cout << "POST failed: could not get upload filename\n";
         return sendPostResponse(clientFd, version, keepAlive, 400);
+    }
 
-    int status = saveUploadedFile(
-        *location,
-        filename,
-        http.getBody()
-    );
+    std::cout << "POST filename: " << filename << '\n';
+
+    int status = saveUploadedFile(*location, filename, http.getBody());
+
+    std::cout << "POST save status: " << status << '\n';
 
     return sendPostResponse(clientFd, version, keepAlive, status);
 }

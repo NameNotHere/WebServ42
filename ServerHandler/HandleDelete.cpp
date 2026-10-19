@@ -1,15 +1,27 @@
 #include "Server.hpp"
 
-bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const std::string& root)
+bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config)
 {
     const std::string target = normalizeTarget(rawTarget);
+    std::string decodedTarget;
+
+    if (!decodeUriPath(target, decodedTarget))
+        return sendErrorResponse(clientFd, version, keepAlive, 400);
+
     if (target.find("..") != std::string::npos)
     {
         sendErrorResponse(clientFd, version, keepAlive, 400);
         return false;
     }
-    const std::string filePath = resolveRequestedPath(root, target); // what the fuck
 
+    const LocationConfig* location = findMatchingLocation(config, target);
+    if (!isMethodAllowed(config, location, "DELETE"))
+    {
+        sendErrorResponse(clientFd, version, keepAlive, 405);
+        return false;
+    }
+
+    const std::string filePath = resolveRequestedPath(config.root, target);
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
     {
@@ -42,4 +54,69 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         sendErrorResponse(clientFd, version, keepAlive, 500);
         return false;
     }
+}
+
+bool isMethodAllowed(const ServerConfig& config, const LocationConfig* location, const std::string& method)
+{
+    // If this location defines allowed_methods, use those.
+    if (location != NULL && !location->allowed_methods.empty())
+    {
+        for (size_t i = 0; i < location->allowed_methods.size(); ++i)
+        {
+            if (location->allowed_methods[i] == method)
+                return true;
+        }
+        return false;
+    }
+
+    // Otherwise, use server-level permissions if configured.
+    if (!config.allowed_methods.empty())
+    {
+        for (size_t i = 0; i < config.allowed_methods.size(); ++i)
+        {
+            if ((method == "GET" && config.allowed_methods[i] == GET) ||
+                (method == "POST" && config.allowed_methods[i] == POST) ||
+                (method == "DELETE" && config.allowed_methods[i] == DELETE))
+                return true;
+        }
+        return false;
+    }
+
+    // Default methods supported by this server.
+    return method == "GET" || method == "POST" || method == "DELETE";
+}
+
+bool decodeUriPath(const std::string& encoded, std::string& decoded)
+{
+    decoded.clear();
+
+    for (size_t i = 0; i < encoded.size(); ++i)
+    {
+        if (encoded[i] != '%')
+        {
+            decoded += encoded[i];
+            continue;
+        }
+
+        // A percent sign must be followed by two hexadecimal digits.
+        if (i + 2 >= encoded.size())
+            return false;
+
+        char hex[3] = { encoded[i + 1], encoded[i + 2], '\0' };
+        char* end = NULL;
+        long value = std::strtol(hex, &end, 16);
+
+        if (end == hex || *end != '\0')
+            return false;
+
+        // Reject decoded NUL bytes and encoded path separators
+        // to avoid ambiguous path handling.
+        if (value == 0 || value == '/' || value == '\\')
+            return false;
+
+        decoded += static_cast<char>(value);
+        i += 2;
+    }
+
+    return true;
 }

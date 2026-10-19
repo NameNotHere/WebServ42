@@ -42,8 +42,8 @@ void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vec
 std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {});
 bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code);
 std::string statusText(int code);
-bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const std::string& root);
-bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const std::string& root);
+bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
+bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config);
 ssize_t sendAll(int fd, const char* buf, size_t len);
 std::string normalizeTarget(const std::string& rawTarget);
 std::string toLower(std::string s);
@@ -58,5 +58,7 @@ bool writeRequestBody(int fileFd, const std::string& body);
 int saveUploadedFile(const LocationConfig& location, const std::string& filename, const std::string& body);
 bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, int status);
 bool handlePost(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
+bool isMethodAllowed(const ServerConfig& config, const LocationConfig* location, const std::string& method);
+bool decodeUriPath(const std::string& encoded, std::string& decoded);
 
 #endif

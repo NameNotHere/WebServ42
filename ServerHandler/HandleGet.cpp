@@ -16,16 +16,33 @@ std::string GetEnding(const std::string& path)
     return "application/octet-stream";
 }
 
-bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const std::string& root)
+bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config)
 {
     std::string target = normalizeTarget(http.getTarget());
-    if (target.find("..") != std::string::npos)
+    std::string decodedTarget;
+
+    if (!decodeUriPath(target, decodedTarget))
+        return sendErrorResponse(clientFd, version, keepAlive, 400);
+
+    const LocationConfig* location =
+    findMatchingLocation(config, decodedTarget);
+
+    if (!isMethodAllowed(config, location, "GET"))
+    {
+        sendErrorResponse(clientFd, version, keepAlive, 405);
+        return false;
+    }
+    if (decodedTarget.find("..") != std::string::npos)
     {
         sendErrorResponse(clientFd, version, keepAlive, 400);
         return false;
     }
-    const std::string path = resolveRequestedPath(root, target);
+    const std::string& root =
+        (location != NULL && !location->root.empty())
+            ? location->root
+            : config.root;
 
+    const std::string path = resolveRequestedPath(root, decodedTarget);
     struct stat st;
     if (stat(path.c_str(), &st) == -1 || !S_ISREG(st.st_mode))
     {

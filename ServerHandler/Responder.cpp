@@ -195,13 +195,13 @@ bool buildResponse(const HttpParser& http, int clientFd,
     }
 
     if (toLower(http.getMethod()) == "get")
-        return handleGet(http, version, keepAlive, clientFd, config.root);
+        return handleGet(http, version, keepAlive, clientFd, config);
 
     else if (toLower(http.getMethod()) == "post")
         return handlePost(http, version, keepAlive, clientFd, config);
 
     else if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive, http.getTarget(), config.root);
+        return handleDelete(clientFd, version, keepAlive, http.getTarget(), config);
 
     return false;
 }
