@@ -17,7 +17,7 @@ std::string Response::statusMsg(int statusCode)
     else if (statusCode == 505)
         return "HTTP Version Not Supported";
     else if (statusCode == 501)
-        return "Method not implemented";
+        return "Method not Implemented";
 
     return "Unknown";
 }

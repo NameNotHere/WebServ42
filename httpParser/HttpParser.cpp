@@ -16,7 +16,7 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
     }
     else if (requestStatus == REQUEST_METHOD_NOT_IMPLEMENTED)
     {
-        std::cout << "Request Method Not implemented\n";
+        std::cout << "Request Method Not Implemented\n";
         return REQUEST_METHOD_NOT_IMPLEMENTED;
     }
     else if (requestStatus == REQUEST_TARGET_NOT_FOUND)
