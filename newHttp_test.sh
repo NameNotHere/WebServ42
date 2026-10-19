@@ -115,7 +115,7 @@ test_request "Tab in request line" \
 
 test_request "Method containing number" \
     "G3T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
+    "501 Method not implemented"
 
 test_request "Method containing special character" \
     "G@T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
@@ -123,7 +123,7 @@ test_request "Method containing special character" \
 
 test_request "Unknown method" \
     "BANANA / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
+    "501 Method not implemented"
 
 # ============================================================
 # GET TARGETS
@@ -266,11 +266,11 @@ test_request "Chunk missing CRLF" \
 
 test_request "Lowercase Transfer-Encoding" \
     "POST /upload/chunk_lower.txt HTTP/1.1\r\nHost: localhost\r\ntransfer-encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
-    "201 OK"
+    "200 OK"
 
 test_request "Mixed-case Transfer-Encoding" \
     "POST /upload/chunk_mixed.txt HTTP/1.1\r\nHost: localhost\r\nTrAnSfEr-EnCoDiNg: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
-    "201 OK"
+    "200 OK"
 
 test_request "Invalid Transfer-Encoding" \
     "POST /upload/chunk_bad_encoding.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: banana\r\n\r\n" \

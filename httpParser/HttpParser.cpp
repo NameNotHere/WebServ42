@@ -14,6 +14,11 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
         std::cout << "Request Method Not allowed\n";
         return REQUEST_METHOD_NOT_ALLOWED;
     }
+    else if (requestStatus == REQUEST_METHOD_NOT_IMPLEMENTED)
+    {
+        std::cout << "Request Method Not implemented\n";
+        return REQUEST_METHOD_NOT_IMPLEMENTED;
+    }
     else if (requestStatus == REQUEST_TARGET_NOT_FOUND)
     {
         std::cout << "Request Target Not found\n";
