@@ -1,0 +1,258 @@
+Possible fixes we still need to make. I ran the entie codebase from us through my DeepSeek subscription and this is what it says. Can't garantuee how accurate it is.
+
+
+
+
+
+
+Confirmed: under __C++17__ the whole project compiles cleanly with `-Wall -Wextra -Werror` (exit 0, zero warnings), and your GCC is 10.5.0, so `std::filesystem` links without needing `-lstdc++fs`. So I'm dropping the "C++98" blocker entirely.
+
+Here is the re-scoped review — everything that is still broken or needs fixing __after__ C++98 is removed from the equation.
+
+---
+
+# Webserv — Full Project Review (C++17 allowed)
+
+## 0. Verdict
+
+The code builds, but it does __not__ satisfy the mandatory non-blocking/single-`poll()` requirement, and it has several functional bugs that will fail real telnet/curl/browser tests. The two biggest categories are:
+
+1. __The I/O model is blocking__ (no `POLLOUT`, blocking `send`/`sendfile`, blocking CGI).
+2. __Request handling has correctness bugs__ (fragmented requests get 400'd, parser state leaks across keep-alive, keep-alive is ignored, per-route config is mostly ignored).
+
+Everything else (config gaps, forbidden syscalls, README, cleanup) is secondary but still relevant for evaluation.
+
+---
+
+## 1. CRITICAL — I/O model violates "1 poll(), non-blocking, read+write readiness"
+
+This is the structural blocker, independent of the C++ version.
+
+- `Server.cpp` `runEventLoop` only ever checks `POLLIN`. There is __no `POLLOUT` monitoring__ for client sockets anywhere.
+
+- All writes happen directly and blocking:
+
+  - `Responder.cpp` `sendAll` → loops `send()`.
+  - `Responder.cpp` `sendFileBody` → `sendfile()`.
+  - `Server.cpp` `runHttpParser` error path → `send()`.
+  - `HandlePost.cpp` / `HandleDelete.cpp` → `sendAll`.
+
+- Client sockets returned by `accept()` are __blocking__ — no `fcntl(F_SETFL, O_NONBLOCK)` on server or client fds. Only the CGI pipes are set non-blocking.
+
+- Consequence: one slow/stuck client blocks the whole server inside `send`/`sendfile`/`recv`. This violates "non-blocking at all times" and "never read/write without poll() readiness".
+
+__Required fix:__ put client + listening sockets in non-blocking mode, maintain per-client output buffers, and only `send`/`write` on `POLLOUT` readiness. Replace `sendfile` with `read()` (regular file, exempt from poll) + buffered `write()`.
+
+---
+
+## 2. CRITICAL — `errno` is checked after read/write to adjust behaviour (forbidden)
+
+- `CgiHandler.cpp` branches on `errno` after `read()`/`write()` (`EINTR`, `EAGAIN`, `EWOULDBLOCK`, `EPIPE`, `ECONNRESET`).
+- `HandlePost.cpp` `writeRequestBody` checks `errno == EINTR`.
+
+The subject explicitly forbids checking `errno` after a read/write to adjust server behaviour. The logic must be restructured around `poll()` readiness and return values instead.
+
+---
+
+## 3. CRITICAL — CGI is synchronous and blocks the event loop
+
+- `Responder.cpp` `buildResponse` calls `CgiHandler::execute()`, which runs a __blocking loop__ until the CGI finishes (or timeout+grace). While one client runs a CGI, the server serves nobody else.
+- The final reaping loop `while (!childReaped) waitpid(pid, &status, 0);` can block forever in the `poll()`-failure branch, because that path `break`s __without killing the child__.
+- CGI also runs its __own nested `poll()`__ inside the handler, separate from the main poll.
+
+__Required fix:__ make CGI async — register the CGI's stdin/stdout fds in the single main `poll()`, run the pump as a state machine, and reap with `waitpid(..., WNOHANG)` on the event loop with a timeout.
+
+---
+
+## 4. HIGH — Forbidden external functions (if the subject's whitelist is enforced)
+
+The "any C++ version" relaxation only affects the standard; the __external function whitelist__ is a separate subject requirement. These are currently used and are not on the allowed list:
+
+- `sendfile` — `Responder.cpp:78` (`#include <sys/sendfile.h>`).
+- `unlink` — `HandleDelete.cpp:29` (there is no allowed delete syscall; this is a known hard spot, but technically off-list).
+- `inet_ntop` — `Server.cpp:72`.
+- `fstatat` / `openat` — `HandlePost.cpp:99/118` (`stat`/`open` are allowed, these variants are not).
+- `clock_gettime` — `CgiHandler.cpp:13`.
+- `setpgid` — `CgiHandler.cpp:233/264`.
+
+If Codam also waives the function whitelist, you can deprioritize this section; otherwise these need replacements or at least a documented justification.
+
+---
+
+## 5. HIGH — Functional correctness bugs
+
+### 5.1 Fragmented/incremental requests are broken
+
+`Server.cpp` `runHttpParser`:
+
+```cpp
+if (reqs[fd].find("\r\n\r\n") == std::string::npos)
+{
+    if (reqs[fd].find('\n') != std::string::npos || reqs[fd].find('\r') != std::string::npos)
+    { /* send 400 and close */ }
+    return;
+}
+```
+
+Any request that arrives split across multiple TCP segments gets 400 as soon as one `\r`/`\n` exists but `\r\n\r\n` hasn't arrived yet. Browsers/curl regularly split headers. The server effectively only works when the full header block arrives in a single `recv`. __Fix:__ keep buffering until the header terminator is found (with a size cap + timeout).
+
+### 5.2 Parser state leaks across keep-alive/pipelined requests
+
+`runHttpParser` creates one `HttpParser http;` and reuses it in a loop for pipelined requests. `parseHttpRequest` overwrites `_method/_target/_version` and `body()` clears `_body`, __but `_headers` (and `_portNum`) are never cleared__. So:
+
+- a second pipelined request without `Host` passes (Host already in map),
+- a normal single header in request #2 collides with request #1's headers → spurious "duplicate header" 400.
+
+__Fix:__ reset the parser (or instantiate a fresh one) per request.
+
+### 5.3 Keep-alive is never computed; always `true`
+
+`buildResponse` takes `bool& keepAlive` but the active implementation never sets it (the computation is only in the commented-out function). `runHttpParser` initializes `keepAlive = true` and never changes it. So `Connection: close` is ignored, and the server replies `Connection: keep-alive` even when the client asked to close. HTTP/1.0 vs 1.1 default is also not handled. __Fix:__ parse `Connection` + version and set `keepAlive` accordingly.
+
+### 5.4 Per-route config is only wired for POST
+
+- `handleGet` and `handleDelete` use `config.root` and __never look at matched locations__.
+
+  - `GET /upload/…` resolves to `./www/upload/…` (404) instead of `./uploads/…`.
+  - Locations that disallow GET/DELETE don't return 405 (your `http_methods.sh` expects `DELETE /upload/…` → 405; it will fail).
+  - `handleDelete` doesn't check `allowed_methods` at all, and deletes from `config.root`, not `location.root`.
+
+- `handlePost` is the only handler using `findMatchingLocation`.
+
+__Fix:__ route GET/POST/DELETE through the matched location (root + `allowed_methods`).
+
+### 5.5 `Expect: 100-continue` not handled
+
+The header is validated but `100 Continue` is never sent. Clients that wait for the interim response (curl `-H 'Expect: 100-continue'`, some browsers on large uploads) will stall. __Fix:__ send `100 Continue` before reading the body (or otherwise handle it).
+
+### 5.6 No request/header/body size limits (DoS)
+
+- `client_max_body_size` is neither parsed nor enforced; `REQUEST_CONTENT_TOO_LARGE`/413 exists but is never used.
+- `reqs[fd]` grows without bound if a client sends bytes with no CR/LF (no header-size cap, no header timeout). This is a memory-exhaustion vector.
+
+### 5.7 No per-connection timeout
+
+`poll()` runs with `-1` and no per-fd timestamps. A client that connects and sends nothing (or slowly trickles) holds a slot forever. The subject explicitly requires requests to never hang indefinitely.
+
+### 5.8 Path handling bugs
+
+- __No URL percent-decoding__: `%20`, `%2e` etc. are treated as literal characters. Safe against encoded traversal, but breaks legitimate encoded URLs (browser compatibility).
+- __`..` blocked, but symlink escape not__: `handleGet` uses `open(path, O_RDONLY)` (follows symlinks), so a symlink inside `./www` pointing outside the root is served. Uploads correctly use `O_NOFOLLOW`/`AT_SYMLINK_NOFOLLOW`; GET should too.
+- __Directory handling__: only a trailing `/` triggers `index.html`. `GET /foo/bar` (directory, no slash) → 404 instead of 301/redirect or listing. `autoindex` is not implemented.
+- __CGI path not sanitized__: the CGI branch in `buildResponse` does __not__ check for `..` before `resolveRequestedPath`, so `script_path` can escape `config.root`.
+
+---
+
+## 6. HIGH — CGI feature gaps
+
+- `isCGI` hardcodes `.cgi/.py/.php/.pl`; no per-route CGI extension config.
+- Interpreter hardcoded to `/usr/bin/python3`; no config.
+- `PATH_INFO`/`PATH_TRANSLATED` never computed.
+- `SCRIPT_NAME` is just the raw target, not mapped/validated against a CGI root.
+- Environment incomplete: `REMOTE_ADDR` always empty; missing `SERVER_ADDR`, `DOCUMENT_ROOT`, `REQUEST_URI`, `REMOTE_PORT`; `SERVER_PORT` often empty (Host without port).
+- CGI branch runs __before__ method dispatch → `DELETE /cgi/test.py` executes a CGI instead of returning 405 (your own test expects unsupported CGI method → 405).
+- `CONTENT_LENGTH` only set when body is non-empty (empty POST → CGI sees no `CONTENT_LENGTH`).
+- `CONTENT_TYPE` only forwarded when present (fine), but the header→`HTTP_` mapping skips `content-length`/`content-type` as expected — however the duplicate-header rejection in the parser already limits what can reach here.
+
+---
+
+## 7. MEDIUM — Parser edge cases
+
+- `checkContentType`: `if (value[value.size() - 1] == ';')` reads out of bounds on an __empty__ `Content-Type:` value → UB/crash.
+
+- `checkMethod`: `request[pos + 1]` read with no bounds check.
+
+- `checkVersion` reads exactly 10 chars and accepts `"HTTP/1.1\r\n"` even with extra tokens on the request line (`GET / HTTP/1.1 extra\r\n`). Your `http_methods.sh` raw test expects this to be 400 — it will not be detected.
+
+- `headers()` uses `request[posStart + 2]` / `request[posStart + 3]` with weak bounds assumptions.
+
+- `checkHost` doesn't handle IPv6 literals (`[::1]:8080`) and only sets `_portNum` when a `:` is present.
+
+- `checkConnection` accepts only exactly `keep-alive`/`close`; real values like `keep-alive, upgrade` are rejected as 400 (browser-compat risk).
+
+- Chunked parsing:
+
+  - `stoul(bytes, 0, 16)` silently accepts invalid sizes like `5x` / `5;ext`.
+  - No chunk-extension handling/validation.
+  - No trailer-header handling after final `0\r\n` — trailers get mis-parsed as the next request.
+  - No cap on total un-chunked body size.
+
+- Duplicate headers are rejected __globally__ (RFC allows some duplicates); combined with the state-leak bug this spurious-400s on pipelined requests.
+
+---
+
+## 8. MEDIUM — Config parser gaps
+
+- `listen` stores a single port integer; __no interface binding__ (`interface:port`) as required.
+- Missing directives: `client_max_body_size`, `autoindex`, `return` (redirect), `cgi` extensions, `index`.
+- `LocationConfig.index` and `LocationConfig.uploadDir` are declared but __never parsed/used__.
+- Custom error pages (`err`) are parsed and existence-checked but __never served__ — `server.errors` is only read by `print_config`.
+- `std::stoi` on `listen`/`err` throws uncaught → invalid config crashes with `std::terminate`.
+- `expect_and_increase` prints debug to `std::cerr` on every token — remove.
+- Lexer has no quoted strings → values with spaces/`;`/`#` impossible.
+- Port range / duplicate-port detection not validated.
+- `LocationConfig.allowed_methods` is `std::vector<std::string>`, `ServerConfig.allowed_methods` is `std::vector<ALLOWED_METHODS>` — inconsistent and case-sensitive at runtime.
+- No `try/catch` around `parse`/`lex` in `main.cpp`.
+
+---
+
+## 9. LOW / cleanup
+
+- __README.md fails the required format__ (subject Chapter V):
+
+  - First line must be italicized: *"This project has been created as part of the 42 curriculum by <login>…"* — currently `# WebServ42`.
+  - Needs `Description`, `Instructions`, `Resources`, and a description of how AI was used.
+
+- __Two Makefiles__: root is the real one; `httpParser/Makefile` is a stale duplicate — delete it.
+
+- __`Response` constructors are declared but never defined__ (commented out in `Response.cpp`). It links only because only static methods are used; instantiating `Response` would break the build.
+
+- `Response::create`/`statusMsg` cover only 200/400/404/405/413/500/505; missing 201, 204, 301, 403, etc. Handlers build their own responses → duplicated/inconsistent framing logic.
+
+- `makeErrorResponse`'s `extraHeaders` parameter is never used.
+
+- `CgiHelper.cpp/.hpp` are empty stubs.
+
+- `httpParser/HttpTester.cpp` is entirely commented out (dead TU still in the Makefile).
+
+- Debug `std::cout` sprinkled through the parser (`"Valid HTTP Request!"`, `"Body:"`, etc.) — remove before submission.
+
+- `main.cpp` requires `argc == 2` and a `.conf` extension; the subject only says config "provided as argument or available in a default path". The `.conf` restriction is an unnecessary risk.
+
+- `main.cpp` has no exception handling around `Init`; a bind failure aborts unceremoniously.
+
+- `Response::create` always emits `Connection: close` — inconsistent with the keep-alive logic elsewhere.
+
+---
+
+## 10. Things that are already OK
+
+- `SO_REUSEADDR` + `SOMAXCONN`.
+- Upload longest-prefix location matching with the `/upload` vs `/upload2` boundary check.
+- Upload file open uses `O_NOFOLLOW` + `fstatat(AT_SYMLINK_NOFOLLOW)` (symlink-safe).
+- FD cleanup is mostly correct across upload/GET/CGI paths.
+- `normalizeTarget` strips query/fragment and enforces leading `/`.
+- `CgiResponse::parse` validates header names/values and handles `\r\n\r\n` and `\n\n`.
+- Chunked un-chunking + CGI stdin/stdout pump are conceptually right (just blocking and using a nested poll).
+
+---
+
+# Prioritized fix list (post-C++17)
+
+1. __Non-blocking single-`poll()` I/O rewrite__ — `O_NONBLOCK` everywhere, per-client output buffers, `POLLOUT` monitoring, drop `sendfile`, remove `errno` branching.
+2. __Async CGI__ — register CGI pipes in the main poll, remove the blocking execute/pump loop.
+3. __Fix fragmented-request handling__ + header-size cap + per-connection timeout.
+4. __Reset parser per request__ and __compute keep-alive__ from `Connection`/version.
+5. __Route GET/POST/DELETE through matched locations__ (root + `allowed_methods`, proper 405).
+6. __Handle `Expect: 100-continue`__.
+7. __Enforce `client_max_body_size` (413)__ and add a max header size.
+8. __Harden paths__: URL-decode, block traversal everywhere (incl. CGI), prevent symlink escape on GET, directory redirect/index/autoindex.
+9. __Wire the full config__: interface:port, index, autoindex, redirect, cgi extensions, custom error pages.
+10. __Replace forbidden syscalls__ (or confirm they're waived).
+11. __Rewrite README.md__ + remove dead files + strip debug output + unify response generation.
+
+---
+
+I have not modified anything (we're in Plan mode). If you want me to start implementing, __toggle to__
+
+__Act Mode (⌘⇧A)__ and tell me the order you'd like — my recommendation is to start with __#1 (non-blocking I/O) + #3 (fragmented requests)__ since everything else hangs off that core.

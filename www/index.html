@@ -2,9 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Webserv</title>
+    <style>
+      :root {
+        color: #17324d;
+        background: #eef4f8;
+        font-family: Georgia, serif;
+      }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        margin: 0;
+      }
+
+      main {
+        width: min(90%, 560px);
+        padding: 3rem;
+        text-align: center;
+        background: white;
+        border: 1px solid #c9d8e3;
+        border-radius: 12px;
+        box-shadow: 0 18px 45px #17324d22;
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: 2.5rem;
+      }
+
+      ul {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0;
+        list-style: none;
+      }
+
+      li {
+        padding: 1rem;
+        color: white;
+        background: #287271;
+        border-radius: 8px;
+        font-size: 1.2rem;
+      }
+    </style>
   </head>
   <body>
-    <h1>It works!</h1>
+    <main>
+      <h1>Our Team</h1>
+      <ul>
+        <li>Sam</li>
+        <li>Orhan</li>
+        <li>Jack</li>
+      </ul>
+    </main>
   </body>
 </html>
