@@ -136,6 +136,26 @@ test_request "Unknown method" \
     "BANANA / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "501 Method not Implemented"
 
+test_request "Unsupported HTTP/2.0 version" \
+    "GET / HTTP/2.0\r\nHost: localhost\r\n\r\n" \
+    "505 HTTP Version Not Supported"
+
+test_request "Unsupported HTTP/1.0 version" \
+    "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n" \
+    "505 HTTP Version Not Supported"
+
+test_request "Method with punctuation" \
+    "GET! / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Missing HTTP version" \
+    "GET / \r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Missing target" \
+    "GET HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
 # ============================================================
 # GET TARGETS
 # ============================================================
@@ -159,6 +179,26 @@ test_request "Multiple query parameters" \
 test_request "Fragment in target" \
     "GET /test#hello HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "200 OK"
+
+test_request "Malformed percent escape" \
+    "GET /bad%2 HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Invalid percent encoding" \
+    "GET /bad%GG HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Encoded directory traversal" \
+    "GET /%2e%2e/etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Raw directory traversal" \
+    "GET /../etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Nonexistent file" \
+    "GET /definitely_missing_webserv_test_847291.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "404 Not Found"
 
 # ============================================================
 # HEADER FORMATTING
@@ -187,6 +227,30 @@ test_request "Empty header name" \
 test_request "Header with empty value" \
     "GET / HTTP/1.1\r\nHost: localhost\r\nX-Test:\r\n\r\n" \
     "200 OK"
+
+test_request "Mixed-case Host header" \
+    "GET / HTTP/1.1\r\nhOsT: localhost\r\n\r\n" \
+    "200 OK"
+
+test_request "Whitespace before header colon" \
+    "GET / HTTP/1.1\r\nHost : localhost\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Header continuation line" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\n X-Test: folded\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Header value containing control character" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\nX-Test: bad\001value\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Content-Length negative" \
+    "POST /upload/cl_negative.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: -1\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Empty Content-Length" \
+    "POST /upload/cl_empty.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length:\r\n\r\n" \
+    "400 Bad Request"
 
 # ============================================================
 # HOST VALIDATION
@@ -270,6 +334,22 @@ test_request "Chunk missing CRLF" \
     "POST /upload/chunk_bad_crlf.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHelloX0\r\n\r\n" \
     "400 Bad Request"
 
+test_request "Content-Length and Transfer-Encoding together" \
+    "POST /upload/cl_te_conflict.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Unsupported transfer coding" \
+    "POST /upload/chunk_gzip.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: gzip\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Chunk data shorter than declared" \
+    "POST /upload/chunk_short.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHell\r\n0\r\n\r\n" \
+    "400 Bad Request"
+
+test_request "Incomplete chunked body" \
+    "POST /upload/chunk_incomplete.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n" \
+    "NO RESPONSE"
+
 # ============================================================
 # TRANSFER-ENCODING HEADER CASE
 # HTTP header names are case-insensitive.
@@ -303,6 +383,26 @@ test_pipeline "GET followed by POST" \
 test_pipeline "POST followed by GET" \
     "POST /upload/pipeline_post_get.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHelloGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     2
+
+test_request "GET on POST-only upload location" \
+    "GET /upload/cl_zero.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "405 Method Not Allowed"
+
+test_request "DELETE on POST-only upload location" \
+    "DELETE /upload/cl_zero.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "405 Method Not Allowed"
+
+test_request "Connection close header" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" \
+    "200 OK"
+
+test_pipeline "Connection close stops pipelined requests" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    1
+
+test_request "HTTP-looking text inside POST body" \
+    "POST /upload/body_request_text.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 14\r\n\r\nGET / HTTP/1.1" \
+    "200 OK"
 
 # ============================================================
 # LINE ENDINGS
