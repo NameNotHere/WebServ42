@@ -6,7 +6,6 @@ CXXFLAGS = -Wall -Wextra -Werror -std=c++17 -I. -MMD -MP
 OBJ_DIR		= obj
 
 SRCS		= httpParser/HttpParser.cpp \
-			  httpParser/HttpTester.cpp \
 			  httpParser/RequestLine.cpp \
 			  httpParser/HttpBody.cpp \
 			  httpParser/Headers.cpp \

@@ -40,13 +40,14 @@ test_request()
     fi
 
     printf '%s %s\n' "$status" "$name"
+    printf '  Input:    '
+    printf '%b' "$request" | cat -v
+    printf '\n'
     printf '  Expected: %s\n' "$expected"
-    printf '  Got:      %s\n' "${status_line:-NO RESPONSE}"
+    printf '  Output:   %s\n' "${status_line:-NO RESPONSE}"
 
     if [ "$status" = "[FAIL]" ]; then
-        printf '  Request:\n'
-        printf '%b' "$request" | cat -v
-        printf '\n  Response headers:\n'
+        printf '  Response headers:\n'
         printf '%s\n' "$result" | head -n 8
         printf '\n'
     fi
@@ -64,20 +65,30 @@ test_pipeline()
     result=$(printf '%b' "$request" | nc -w "$TIMEOUT" "$HOST" "$PORT" 2>/dev/null)
 
     local actual_count
-    actual_count=$(printf '%s\n' "$result" |
-        grep -c -E '^HTTP/[0-9.]+ [0-9]{3}' || true)
+    actual_count=$(printf '%s' "$result" |
+        grep -aoE 'HTTP/[0-9.]+ [0-9]{3}' |
+        wc -l)
 
     if [ "$actual_count" -eq "$expected_count" ]; then
-        printf '[PASS] %s (%s responses)\n' "$name" "$actual_count"
+        status="[PASS]"
         ((passed++))
     else
-        printf '[FAIL] %s\n' "$name"
-        printf '  Expected responses: %s\n' "$expected_count"
-        printf '  Actual responses:   %s\n' "$actual_count"
-        printf '  Status lines:\n'
-        printf '%s\n' "$result" | grep -E '^HTTP/[0-9.]+ [0-9]{3}' || true
-        printf '\n'
+        status="[FAIL]"
         ((failed++))
+    fi
+
+    printf '%s %s\n' "$status" "$name"
+    printf '  Input:\n'
+    printf '%b' "$request" | cat -v
+    printf '\n'
+    printf '  Expected output: %s HTTP responses\n' "$expected_count"
+    printf '  Actual output:   %s HTTP responses\n' "$actual_count"
+
+    if [ "$status" = "[FAIL]" ]; then
+        printf '  Status lines:\n'
+        printf '%s' "$result" |
+            grep -aoE 'HTTP/[0-9.]+ [0-9]{3}' || true
+        printf '\n'
     fi
 }
 
@@ -115,7 +126,7 @@ test_request "Tab in request line" \
 
 test_request "Method containing number" \
     "G3T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "501 Method not implemented"
+    "501 Method not Implemented"
 
 test_request "Method containing special character" \
     "G@T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
@@ -123,7 +134,7 @@ test_request "Method containing special character" \
 
 test_request "Unknown method" \
     "BANANA / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "501 Method not implemented"
+    "501 Method not Implemented"
 
 # ============================================================
 # GET TARGETS

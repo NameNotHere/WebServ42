@@ -1,0 +1,3 @@
+- Change return false to return senderrorresponse in handle get post and delete.
+- Actually do something with the buildResponse bool.
+- 

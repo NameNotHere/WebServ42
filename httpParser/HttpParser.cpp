@@ -2,6 +2,8 @@
 
 HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
 {
+    _headers.clear();
+
     RequestStatus requestStatus = requestLine(request);
 
     if (requestStatus == REQUEST_BAD)

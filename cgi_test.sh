@@ -265,7 +265,7 @@ run_http_cgi \
 run_http_cgi \
     "Unsupported CGI method is handled" \
     "PUT /cgi/test.py HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n" \
-    "501 Method Not Implemented" \
+    "501 Method not Implemented" \
     "check unsupported HTTP method handling"
 
 
