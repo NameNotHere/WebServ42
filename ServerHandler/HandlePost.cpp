@@ -135,15 +135,7 @@ bool writeRequestBody(int fileFd, const std::string& body)
             body.size() - written
         );
 
-        if (result < 0)
-        {
-            if (errno == EINTR)
-                continue;
-
-            return false;
-        }
-
-        if (result == 0)
+        if (result <= 0) //removed errno if statement as that is forbidden for server behavior
             return false;
 
         written += static_cast<size_t>(result);
