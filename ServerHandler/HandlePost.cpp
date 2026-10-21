@@ -149,13 +149,19 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
     int dirFd = openUploadDirectory(location);
 
     if (dirFd == -1)
+    {
+        std::cerr << "DEBUG: openUploadDirectory failed: "
+                << location.root << '\n';
         return 500;
+    }
 
     bool existed = false;
     int fileFd = openUploadFile(dirFd, filename, existed);
 
     if (fileFd == -1)
     {
+        std::cerr << "DEBUG: openUploadFile failed for: "
+              << filename << '\n';
         int savedErrno = errno;
         close(dirFd);
 
@@ -168,7 +174,13 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
         return 500;
     }
 
+    std::cerr << "DEBUG: opened file successfully, body size = "
+          << body.size() << '\n';
+
     bool success = writeRequestBody(fileFd, body);
+
+    if (!success)
+        std::cerr << "DEBUG: writeRequestBody failed\n";
 
     if (close(fileFd) == -1)
         success = false;

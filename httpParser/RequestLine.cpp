@@ -4,17 +4,19 @@ HttpParser::RequestStatus HttpParser::requestLine(const std::string& request)
 {
 	if (checkMethod(request) == REQUEST_BAD)
 		return REQUEST_BAD;
+
 	else if (checkMethod(request) == REQUEST_METHOD_NOT_ALLOWED)
 		return REQUEST_METHOD_NOT_ALLOWED;
+
 	else if (checkMethod(request) == REQUEST_METHOD_NOT_IMPLEMENTED)
 		return REQUEST_METHOD_NOT_IMPLEMENTED;
-
 
 	if (!checkTarget(request))
 		return REQUEST_TARGET_NOT_FOUND;
 
 	if (checkVersion(request) == REQUEST_VERSION_NOT_SUPPORTED)
 		return REQUEST_VERSION_NOT_SUPPORTED;
+
 	else if (checkVersion(request) == REQUEST_BAD)
 		return REQUEST_BAD;
 
@@ -29,12 +31,12 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 		return REQUEST_BAD;
 
 	std::string method = request.substr(0, pos);
+
 	if(!validChar(method))
 		return REQUEST_BAD;
 
 	std::string lowerMethod = method;
 	lowerCase(lowerMethod);
-	std::cout << "Method:" << lowerMethod << "\n";
 
 	if (lowerMethod != "get"    &&
 		lowerMethod != "post"   &&
@@ -53,6 +55,7 @@ bool HttpParser::checkTarget(const std::string& request)
 		return false;
 
 	size_t secondSpace = request.find(' ', firstSpace + 1);
+
 	if(secondSpace == std::string::npos)
 		return false;
 
@@ -64,7 +67,6 @@ bool HttpParser::checkTarget(const std::string& request)
 			return false;
 	}
 	_target = target;
-	
 	return true;
 }
 

@@ -44,22 +44,15 @@ std::string Response::create(int statusCode, const std::string& body)
     return response;
 }
 
-// Response::Response() : statusCode_(200), body_(){}
+Response::Response(){}
 
-// Response::Response(int statusCode, const std::string& body)
-// 	: statusCode_(statusCode), body_(body){}
+Response::Response(int, const std::string&){}
 
-// Response::Response(const Response& other)
-// 	: statusCode_(other.statusCode_), body_(other.body_){}
+Response::Response(const Response&){}
 
-// Response& Response::operator=(const Response& other)
-// {
-// 	if (this != &other)
-// 	{
-// 		statusCode_ = other.statusCode_;
-// 		body_ = other.body_;
-// 	}
-// 	return *this;
-// }
+Response& Response::operator=(const Response&)
+{
+	return *this;
+}
 
 Response::~Response(){}

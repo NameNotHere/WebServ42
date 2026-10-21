@@ -21,6 +21,9 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
     	return BODY_VALID;
 	}
 
+	if(hasTransferEncoding && hasContentLength)
+		return BODY_INVALID;
+
 	if(hasTransferEncoding)
 	{
 		size_t bodyLength = 0;

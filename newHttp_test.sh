@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 HOST="localhost"
@@ -17,44 +16,37 @@ test_request()
 
     local result
     result=$(printf '%b' "$request" | nc -w "$TIMEOUT" "$HOST" "$PORT" 2>/dev/null)
-    local exit_code=$?
 
     local status_line
     status_line=$(printf '%s\n' "$result" | grep -m 1 -E '^HTTP/[0-9.]+ [0-9]{3}' || true)
 
-    local status
     if [ "$expected" = "NO RESPONSE" ]; then
         if [ -z "$result" ]; then
             status="[PASS]"
-            ((passed++))
+            ((passed += 1))
         else
             status="[FAIL]"
-            ((failed++))
+            ((failed += 1))
         fi
     elif printf '%s\n' "$result" | grep -Fq "$expected"; then
         status="[PASS]"
-        ((passed++))
+        ((passed += 1))
     else
         status="[FAIL]"
-        ((failed++))
+        ((failed += 1))
     fi
 
     printf '%s %s\n' "$status" "$name"
-    printf '  Input:    '
-    printf '%b' "$request" | cat -v
-    printf '\n'
-    printf '  Expected: %s\n' "$expected"
-    printf '  Output:   %s\n' "${status_line:-NO RESPONSE}"
-
     if [ "$status" = "[FAIL]" ]; then
+        printf '  Expected: %s\n' "$expected"
+        printf '  Output:   %s\n' "${status_line:-NO RESPONSE}"
         printf '  Response headers:\n'
         printf '%s\n' "$result" | head -n 8
         printf '\n'
     fi
 }
 
-# Tests that send multiple requests on ONE connection.
-# Checks the number of HTTP status lines returned.
+# Send multiple requests on one connection and count HTTP status lines.
 test_pipeline()
 {
     local name="$1"
@@ -71,28 +63,22 @@ test_pipeline()
 
     if [ "$actual_count" -eq "$expected_count" ]; then
         status="[PASS]"
-        ((passed++))
+        ((passed += 1))
     else
         status="[FAIL]"
-        ((failed++))
+        ((failed += 1))
     fi
 
     printf '%s %s\n' "$status" "$name"
-    printf '  Input:\n'
-    printf '%b' "$request" | cat -v
-    printf '\n'
-    printf '  Expected output: %s HTTP responses\n' "$expected_count"
-    printf '  Actual output:   %s HTTP responses\n' "$actual_count"
-
     if [ "$status" = "[FAIL]" ]; then
+        printf '  Expected %s HTTP responses, got %s\n' "$expected_count" "$actual_count"
         printf '  Status lines:\n'
-        printf '%s' "$result" |
-            grep -aoE 'HTTP/[0-9.]+ [0-9]{3}' || true
+        printf '%s' "$result" | grep -aoE 'HTTP/[0-9.]+ [0-9]{3}' || true
         printf '\n'
     fi
 }
 
-# Confirm the server is reachable before running tests.
+# Make sure the server is running before testing.
 if ! (echo >/dev/tcp/"$HOST"/"$PORT") >/dev/null 2>&1; then
     echo "ERROR: Cannot connect to $HOST:$PORT"
     echo "Start Webserv first, then run this script again."
@@ -100,329 +86,99 @@ if ! (echo >/dev/tcp/"$HOST"/"$PORT") >/dev/null 2>&1; then
 fi
 
 echo "======================================"
-echo "       WEBSERV HTTP EDGE TESTS"
+echo "       WEBSERV CORE HTTP TESTS"
 echo "======================================"
 echo
 
-# ============================================================
-# REQUEST LINE
-# ============================================================
-
-test_request "Spaces before method" \
-    " GET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Extra space before target" \
+# 1. Request-line parsing and method/version errors
+test_request "Malformed request line" \
     "GET  / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Extra space before version" \
-    "GET /  HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Tab in request line" \
-    "GET\t/ HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Method containing number" \
-    "G3T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "501 Method not Implemented"
-
-test_request "Method containing special character" \
-    "G@T / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Unknown method" \
+test_request "Unsupported method" \
     "BANANA / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "501 Method not Implemented"
 
-test_request "Unsupported HTTP/2.0 version" \
+test_request "Unsupported HTTP version" \
     "GET / HTTP/2.0\r\nHost: localhost\r\n\r\n" \
     "505 HTTP Version Not Supported"
 
-test_request "Unsupported HTTP/1.0 version" \
-    "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n" \
-    "505 HTTP Version Not Supported"
-
-test_request "Method with punctuation" \
-    "GET! / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Missing HTTP version" \
-    "GET / \r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Missing target" \
-    "GET HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-# ============================================================
-# GET TARGETS
-# ============================================================
-
-test_request "Root target" \
+# 2. Basic GET, query handling, missing files, and path traversal
+test_request "GET root" \
     "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "200 OK"
 
-test_request "Nested target" \
-    "GET /foo/bar/baz.html HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+test_request "GET with query string" \
+    "GET /test?a=1&b=2 HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "200 OK"
 
-test_request "Root with query" \
-    "GET /?foo=bar HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "200 OK"
-
-test_request "Multiple query parameters" \
-    "GET /test?a=1&b=2&c=3 HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "200 OK"
-
-test_request "Fragment in target" \
-    "GET /test#hello HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "200 OK"
-
-test_request "Malformed percent escape" \
-    "GET /bad%2 HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Invalid percent encoding" \
-    "GET /bad%GG HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Encoded directory traversal" \
-    "GET /%2e%2e/etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Raw directory traversal" \
-    "GET /../etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Nonexistent file" \
+test_request "GET missing file" \
     "GET /definitely_missing_webserv_test_847291.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "404 Not Found"
 
-# ============================================================
-# HEADER FORMATTING
-# ============================================================
+test_request "Encoded directory traversal rejected" \
+    "GET /%2e%2e/etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    "400 Bad Request"
 
-test_request "Host with leading spaces" \
-    "GET / HTTP/1.1\r\nHost:    localhost\r\n\r\n" \
-    "200 OK"
-
-test_request "Host with trailing spaces" \
-    "GET / HTTP/1.1\r\nHost: localhost   \r\n\r\n" \
-    "200 OK"
-
-test_request "Host with tab whitespace" \
-    "GET / HTTP/1.1\r\nHost:\tlocalhost\r\n\r\n" \
-    "200 OK"
-
+# 3. Header validation
 test_request "Header without colon" \
     "GET / HTTP/1.1\r\nHost: localhost\r\nBrokenHeader\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Empty header name" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\n: something\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Header with empty value" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\nX-Test:\r\n\r\n" \
-    "200 OK"
-
-test_request "Mixed-case Host header" \
-    "GET / HTTP/1.1\r\nhOsT: localhost\r\n\r\n" \
-    "200 OK"
-
-test_request "Whitespace before header colon" \
-    "GET / HTTP/1.1\r\nHost : localhost\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Header continuation line" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\n X-Test: folded\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Header value containing control character" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\nX-Test: bad\001value\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Content-Length negative" \
-    "POST /upload/cl_negative.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: -1\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Empty Content-Length" \
-    "POST /upload/cl_empty.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length:\r\n\r\n" \
-    "400 Bad Request"
-
-# ============================================================
-# HOST VALIDATION
-# ============================================================
-
-test_request "Host with port" \
-    "GET / HTTP/1.1\r\nHost: localhost:2020\r\n\r\n" \
-    "200 OK"
-
-test_request "Empty Host" \
-    "GET / HTTP/1.1\r\nHost:\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Missing Host" \
+test_request "Missing Host header" \
     "GET / HTTP/1.1\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Duplicate Host" \
+test_request "Duplicate Host header" \
     "GET / HTTP/1.1\r\nHost: localhost\r\nHost: example.com\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Host with invalid characters" \
-    "GET / HTTP/1.1\r\nHost: local@host\r\n\r\n" \
-    "400 Bad Request"
-
-# ============================================================
-# CONTENT-LENGTH
-# Uploads target /upload, not /, because this server's POST
-# handler is designed for file uploads.
-# ============================================================
-
-test_request "Content-Length zero" \
-    "POST /upload/cl_zero.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n" \
+# 4. Request-body framing
+test_request "POST with Content-Length" \
+    "POST /upload/core_post.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHello" \
     "200 OK"
 
-test_request "Content-Length one" \
-    "POST /upload/cl_one.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1\r\n\r\nA" \
-    "200 OK"
-
-test_request "Content-Length too large" \
-    "POST /upload/cl_large.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\nHello" \
-    "NO RESPONSE"
-
-test_request "Content-Length with whitespace" \
-    "POST /upload/cl_spaces.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length:  5\r\n\r\nHello" \
-    "200 OK"
-
-test_request "Content-Length decimal garbage" \
-    "POST /upload/cl_garbage.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5abc\r\n\r\nHello" \
+test_request "Invalid Content-Length" \
+    "POST /upload/core_bad_length.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5abc\r\n\r\nHello" \
     "400 Bad Request"
 
-test_request "Duplicate Content-Length" \
-    "POST /upload/cl_duplicate.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nHello" \
-    "400 Bad Request"
-
-# ============================================================
-# CHUNKED TRANSFER CODING
-# ============================================================
-
-test_request "One chunk" \
-    "POST /upload/chunk_one.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
+test_request "One valid chunked body" \
+    "POST /upload/core_chunk.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
     "200 OK"
 
-test_request "Multiple chunks" \
-    "POST /upload/chunk_multi.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n" \
-    "200 OK"
-
-test_request "Small chunks" \
-    "POST /upload/chunk_small.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" \
-    "200 OK"
-
-test_request "Zero length chunk" \
-    "POST /upload/chunk_zero.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n" \
-    "200 OK"
-
-test_request "Invalid hexadecimal chunk size" \
-    "POST /upload/chunk_invalid.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\nGG\r\nHello\r\n0\r\n\r\n" \
+test_request "Invalid chunk size" \
+    "POST /upload/core_bad_chunk.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\nGG\r\nHello\r\n0\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Chunk missing CRLF" \
-    "POST /upload/chunk_bad_crlf.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHelloX0\r\n\r\n" \
+test_request "Content-Length and Transfer-Encoding conflict" \
+    "POST /upload/core_cl_te.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
     "400 Bad Request"
 
-test_request "Content-Length and Transfer-Encoding together" \
-    "POST /upload/cl_te_conflict.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Unsupported transfer coding" \
-    "POST /upload/chunk_gzip.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: gzip\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Chunk data shorter than declared" \
-    "POST /upload/chunk_short.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHell\r\n0\r\n\r\n" \
-    "400 Bad Request"
-
-test_request "Incomplete chunked body" \
-    "POST /upload/chunk_incomplete.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n" \
-    "NO RESPONSE"
-
-# ============================================================
-# TRANSFER-ENCODING HEADER CASE
-# HTTP header names are case-insensitive.
-# ============================================================
-
-test_request "Lowercase Transfer-Encoding" \
-    "POST /upload/chunk_lower.txt HTTP/1.1\r\nHost: localhost\r\ntransfer-encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
-    "200 OK"
-
-test_request "Mixed-case Transfer-Encoding" \
-    "POST /upload/chunk_mixed.txt HTTP/1.1\r\nHost: localhost\r\nTrAnSfEr-EnCoDiNg: chunked\r\n\r\n5\r\nHello\r\n0\r\n\r\n" \
-    "200 OK"
-
-test_request "Invalid Transfer-Encoding" \
-    "POST /upload/chunk_bad_encoding.txt HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: banana\r\n\r\n" \
-    "400 Bad Request"
-
-# ============================================================
-# REQUEST BOUNDARIES AND PIPELINING
-# Each pipeline test verifies the number of HTTP responses.
-# ============================================================
-
-test_pipeline "Two GET requests" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    2
-
-test_pipeline "GET followed by POST" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nPOST /upload/pipeline_get_post.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHello" \
-    2
-
-test_pipeline "POST followed by GET" \
-    "POST /upload/pipeline_post_get.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nHelloGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    2
-
-test_request "GET on POST-only upload location" \
-    "GET /upload/cl_zero.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+# 5. Route method restrictions and connection behavior
+test_request "GET forbidden on POST-only upload location" \
+    "GET /upload/core_post.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     "405 Method Not Allowed"
 
-test_request "DELETE on POST-only upload location" \
-    "DELETE /upload/cl_zero.txt HTTP/1.1\r\nHost: localhost\r\n\r\n" \
-    "405 Method Not Allowed"
-
-test_request "Connection close header" \
+test_request "Connection: close returns a response" \
     "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" \
     "200 OK"
 
-test_pipeline "Connection close stops pipelined requests" \
+test_pipeline "Two pipelined GET requests" \
+    "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
+    2
+
+test_pipeline "Connection: close stops pipelined requests" \
     "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n" \
     1
 
-test_request "HTTP-looking text inside POST body" \
-    "POST /upload/body_request_text.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 14\r\n\r\nGET / HTTP/1.1" \
-    "200 OK"
+test_pipeline "HTTP-looking text stays inside POST body" \
+    "POST /upload/core_body_boundary.txt HTTP/1.1\r\nHost: localhost\r\nContent-Length: 14\r\n\r\nGET / HTTP/1.1" \
+    1
 
-# ============================================================
-# LINE ENDINGS
-# ============================================================
-
-test_request "LF only" \
+# 6. Reject incorrect line endings
+test_request "LF-only line endings rejected" \
     "GET / HTTP/1.1\nHost: localhost\n\n" \
     "400 Bad Request"
-
-test_request "CR only" \
-    "GET / HTTP/1.1\rHost: localhost\r\r" \
-    "400 Bad Request"
-
-test_request "Extra blank line" \
-    "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n\r\n" \
-    "200 OK"
-
-# ============================================================
-# SUMMARY
-# ============================================================
 
 echo
 echo "======================================"

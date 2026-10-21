@@ -194,6 +194,16 @@ bool buildResponse(const HttpParser& http, int clientFd,
         return sendAll(clientFd, output.data(), output.size()) != -1;
     }
 
+    std::string connection =
+    toLower(findHeaderValue(http.getHeaders(), "connection"));
+
+    if (connection == "close")
+        keepAlive = false;
+    else if (connection == "keep-alive")
+        keepAlive = true;
+    else
+        keepAlive = (version == "HTTP/1.1");
+
     if (toLower(http.getMethod()) == "get")
         return handleGet(http, version, keepAlive, clientFd, config);
 
