@@ -82,8 +82,9 @@ bool isMethodAllowed(const ServerConfig& config, const LocationConfig* location,
         return false;
     }
 
-    // Default methods supported by this server.
-    return method == "GET" || method == "POST" || method == "DELETE";
+    // Without an explicit method list, locations are read-only by default.
+    // POST and DELETE must be enabled in the location or server config.
+    return method == "GET";
 }
 
 bool decodeUriPath(const std::string& encoded, std::string& decoded)

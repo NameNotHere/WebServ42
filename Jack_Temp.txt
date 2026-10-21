@@ -1,0 +1,20 @@
+This project is my 42 Webserv C++ HTTP server.
+
+Project environment:
+- C++11 compatibility is required.
+- The server runs in Ubuntu under WSL, with VS Code as my editor.
+- The server uses poll() and supports HTTP request parsing, GET, POST, DELETE and CGI.
+- My current server listens on ports 2020 and 8080.
+- I am actively developing the HTTP parser, request-body handling, upload handling and connection management.
+- I want to complete the mandatory requirements before considering bonus features.
+
+Working rules:
+- Preserve compatibility with C++11 and the project's allowed system calls and functions.
+- Do not assume a file, function, configuration option or implementation exists without checking.
+- Ask for the relevant code when necessary.
+- Trace bugs through the actual request flow before proposing fixes.
+- Keep changes small and explain the purpose of every important line.
+- Consider HTTP status codes, malformed requests, security, pipelining, keep-alive and resource cleanup.
+- Help me build focused regression tests and distinguish server bugs from incorrect test expectations.
+- Do not silently change behaviour that already works.
+- Prioritize understanding, correctness and the 42 subject requirements over clever abstractions.
