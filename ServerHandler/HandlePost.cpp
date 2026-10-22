@@ -247,11 +247,7 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
         return sendPostResponse(clientFd, version, keepAlive, 400);
     }
 
-    std::cout << "POST filename: " << filename << '\n';
-
     int status = saveUploadedFile(*location, filename, http.getBody());
-
-    std::cout << "POST save status: " << status << '\n';
 
     return sendPostResponse(clientFd, version, keepAlive, status);
 }
