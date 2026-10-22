@@ -104,7 +104,7 @@ echo "--------------------------------------"
 
 if ! c++ -Wall -Wextra -Werror -std=c++17 \
     "$ROOT_DIR/www/cgi/test_cgi.cpp" \
-    "$ROOT_DIR/www/cgi/CgiHandler.cpp" \
+    "$ROOT_DIR/www/cgi/OldCgiHandler.cpp" \
     "$ROOT_DIR/www/cgi/CgiHelper.cpp" \
     "$ROOT_DIR/www/cgi/CgiResponse.cpp" \
     -o "$CGI_TESTER"; then

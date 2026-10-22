@@ -1,5 +1,33 @@
 #include "Server.hpp"
 
+namespace
+{
+    struct OutputSegment
+    {
+        std::string bytes;
+        size_t offset;
+        int fileFd;
+        off_t fileRemaining;
+        bool isFile;
+
+        OutputSegment(const std::string& data)
+            : bytes(data), offset(0), fileFd(-1), fileRemaining(0), isFile(false) {}
+
+        OutputSegment(int fd, off_t size)
+            : offset(0), fileFd(fd), fileRemaining(size), isFile(true) {}
+    };
+
+    struct ClientOutput
+    {
+        std::deque<OutputSegment> segments;
+        bool closeWhenDrained;
+
+        ClientOutput() : closeWhenDrained(false) {}
+    };
+
+    std::map<int, ClientOutput> clientOutputs;
+}
+
 std::string toLower(std::string s)
 {
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
@@ -30,15 +58,85 @@ std::string findHeaderValue(const std::map<std::string, std::string>& headers, c
 
 ssize_t sendAll(int fd, const char* buf, size_t len)
 {
-    size_t total = 0;
-    while (total < len)
+    if (len == 0)
+        return 0;
+    clientOutputs[fd].segments.push_back(
+        OutputSegment(std::string(buf, len)));
+    return static_cast<ssize_t>(len);
+}
+
+bool hasPendingOutput(int clientFd)
+{
+    std::map<int, ClientOutput>::const_iterator it =
+        clientOutputs.find(clientFd);
+    return it != clientOutputs.end() && !it->second.segments.empty();
+}
+
+bool shouldCloseAfterOutput(int clientFd)
+{
+    std::map<int, ClientOutput>::const_iterator it =
+        clientOutputs.find(clientFd);
+    return it != clientOutputs.end() && it->second.closeWhenDrained;
+}
+
+void closeAfterPendingOutput(int clientFd)
+{
+    clientOutputs[clientFd].closeWhenDrained = true;
+}
+
+void clearPendingOutput(int clientFd)
+{
+    std::map<int, ClientOutput>::iterator it = clientOutputs.find(clientFd);
+    if (it == clientOutputs.end())
+        return;
+    for (size_t i = 0; i < it->second.segments.size(); ++i)
+        if (it->second.segments[i].isFile && it->second.segments[i].fileFd != -1)
+            close(it->second.segments[i].fileFd);
+    clientOutputs.erase(it);
+}
+
+bool flushPendingOutput(int clientFd)
+{
+    std::map<int, ClientOutput>::iterator output = clientOutputs.find(clientFd);
+    if (output == clientOutputs.end())
+        return true;
+
+    while (!output->second.segments.empty())
     {
-        ssize_t sent = send(fd, buf + total, len - total, 0);
-        if (sent <= 0)
-            return -1;
-        total += sent;
+        OutputSegment& segment = output->second.segments.front();
+        if (segment.isFile && segment.offset == segment.bytes.size()
+            && segment.fileRemaining > 0)
+        {
+            char buffer[16384];
+            size_t amount = segment.fileRemaining > static_cast<off_t>(sizeof(buffer))
+                ? sizeof(buffer) : static_cast<size_t>(segment.fileRemaining);
+            ssize_t bytesRead = read(segment.fileFd, buffer, amount);
+            if (bytesRead <= 0)
+                return false;
+            segment.bytes.assign(buffer, static_cast<size_t>(bytesRead));
+            segment.offset = 0;
+            segment.fileRemaining -= bytesRead;
+        }
+
+        if (segment.offset < segment.bytes.size())
+        {
+            ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
+                                segment.bytes.size() - segment.offset, 0);
+            if (sent <= 0)
+                return sent < 0;
+            segment.offset += static_cast<size_t>(sent);
+            if (segment.offset < segment.bytes.size())
+                return true;
+        }
+
+        if (!segment.isFile || segment.fileRemaining == 0)
+        {
+            if (segment.isFile && segment.fileFd != -1)
+                close(segment.fileFd);
+            output->second.segments.pop_front();
+        }
     }
-    return total;
+    return true;
 }
 
 std::string normalizeTarget(const std::string& rawTarget)
@@ -70,21 +168,41 @@ std::string resolveRequestedPath(const std::string& root, const std::string& tar
 
 bool sendFileBody(int clientFd, int fd_in, off_t fileSize)
 {
-    off_t offset = 0;
-    off_t remaining = fileSize;
-
-    while (remaining > 0)
+    if (fileSize <= 0)
     {
-        ssize_t sent = sendfile(clientFd, fd_in, &offset, static_cast<size_t>(remaining));
-        if (sent <= 0)
-        {
-            close(fd_in);
-            return false;
-        }
-        remaining -= sent;
+        close(fd_in);
+        return true;
     }
-    close(fd_in);
+    clientOutputs[clientFd].segments.push_back(OutputSegment(fd_in, fileSize));
     return true;
+}
+
+bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result)
+{
+    if (result.timed_out || result.io_error || result.exit_status != 0)
+        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
+
+    CgiResponse parsed;
+    if (!parsed.parse(result.raw_output))
+        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
+
+    std::ostringstream response;
+    response << job.httpVersion << " " << parsed.status_code << " "
+             << parsed.status_message << "\r\n";
+    for (std::map<std::string, std::string>::const_iterator it =
+             parsed.headers.begin(); it != parsed.headers.end(); ++it)
+    {
+        if (it->first == "content-length" || it->first == "connection")
+            continue;
+        response << it->first << ": " << it->second << "\r\n";
+    }
+    response << "Content-Length: " << parsed.body.size() << "\r\n";
+    response << (job.keepAlive
+        ? "Connection: keep-alive\r\n"
+        : "Connection: close\r\n");
+    response << "\r\n" << parsed.body;
+    std::string output = response.str();
+    return sendAll(clientFd, output.data(), output.size()) != -1;
 }
 
 // bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const std::string& root)
@@ -125,13 +243,18 @@ std::string toUpper(std::string value)
 }
 
 bool buildResponse(const HttpParser& http, int clientFd,
-                   bool& keepAlive, const ServerConfig& config) //new build response, build with AI. Need to change some stuff and make sure it's bullet proof.
+                   bool& keepAlive, const ServerConfig& config,
+                   CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs)
 {
     std::string version = http.getVersion();
-
-    // Keep-alive calculation remains here.
-
-    CgiHandler cgi("/usr/bin/python3", 5);
+    std::string connection =
+        toLower(findHeaderValue(http.getHeaders(), "connection"));
+    if (connection == "close")
+        keepAlive = false;
+    else if (connection == "keep-alive")
+        keepAlive = true;
+    else
+        keepAlive = (version == "HTTP/1.1");
 
     if (cgi.isCGI(http.getTarget()))
     {
@@ -158,51 +281,15 @@ bool buildResponse(const HttpParser& http, int clientFd,
         request.server_software = "webserv/1.0";
         request.server_port = http.getPortNum();
 
-        CGIResult result = cgi.execute(request);
-
-        if (result.timed_out || result.io_error || result.exit_status != 0)
+        CgiJob job;
+        if (!cgi.start(request, job))
             return sendErrorResponse(clientFd, version, keepAlive, 500);
-
-        CgiResponse parsed;
-        if (!parsed.parse(result.raw_output))
-            return sendErrorResponse(clientFd, version, keepAlive, 500);
-
-        std::ostringstream response;
-        response << version << " "
-                 << parsed.status_code << " "
-                 << parsed.status_message << "\r\n";
-
-        for (std::map<std::string, std::string>::const_iterator it =
-                 parsed.headers.begin();
-             it != parsed.headers.end(); ++it)
-        {
-            if (it->first == "content-length"
-                || it->first == "connection")
-                continue;
-
-            response << it->first << ": " << it->second << "\r\n";
-        }
-
-        response << "Content-Length: " << parsed.body.size() << "\r\n";
-        response << (keepAlive
-            ? "Connection: keep-alive\r\n"
-            : "Connection: close\r\n");
-        response << "\r\n";
-        response << parsed.body;
-
-        std::string output = response.str();
-        return sendAll(clientFd, output.data(), output.size()) != -1;
+        job.clientFd = clientFd;
+        job.httpVersion = version;
+        job.keepAlive = keepAlive;
+        cgiJobs[clientFd] = job;
+        return true;
     }
-
-    std::string connection =
-    toLower(findHeaderValue(http.getHeaders(), "connection"));
-
-    if (connection == "close")
-        keepAlive = false;
-    else if (connection == "keep-alive")
-        keepAlive = true;
-    else
-        keepAlive = (version == "HTTP/1.1");
 
     if (toLower(http.getMethod()) == "get")
         return handleGet(http, version, keepAlive, clientFd, config);
@@ -215,4 +302,3 @@ bool buildResponse(const HttpParser& http, int clientFd,
 
     return false;
 }
-// might have to toLower() it->first and it->second

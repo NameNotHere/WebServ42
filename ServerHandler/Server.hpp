@@ -25,6 +25,8 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include <cctype>
+#include <deque>
+#include <csignal>
 
 struct Server
 {
@@ -32,15 +34,25 @@ struct Server
     ServerConfig conf;
 };
 
-bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection, const ServerConfig& config);
+bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection,
+                   const ServerConfig& config, CgiHandler& cgi,
+                   std::map<int, CgiJob>& cgiJobs);
 void print_config(const std::vector<ServerConfig>& servers);
 void Init(Server& server);
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
 void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs);
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
-void runHttpParser(int fd, size_t& i, std::map<int, std::string>& reqs, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs);
+void runHttpParser(int fd, std::map<int, std::string>& reqs,
+                   std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+                   std::map<int, CgiJob>& cgiJobs);
 std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {});
 bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code);
+bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result);
+bool hasPendingOutput(int clientFd);
+bool flushPendingOutput(int clientFd);
+void clearPendingOutput(int clientFd);
+void closeAfterPendingOutput(int clientFd);
+bool shouldCloseAfterOutput(int clientFd);
 std::string statusText(int code);
 bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config);

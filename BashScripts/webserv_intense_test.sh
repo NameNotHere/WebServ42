@@ -5,7 +5,8 @@ set -uo pipefail
 BASE_URL="${BASE_URL:-http://127.0.0.1:2020}"
 AUTHORITY="${BASE_URL#*://}"; AUTHORITY="${AUTHORITY%%/*}"
 if [[ "$AUTHORITY" == *:* ]]; then HOST="${AUTHORITY%:*}"; PORT="${AUTHORITY##*:}"; else HOST="$AUTHORITY"; PORT=80; fi
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WWW_DIR="${WWW_DIR:-$ROOT_DIR/www}"
 UPLOAD_DIR="${UPLOAD_DIR:-$ROOT_DIR/uploads}"
 TMP="$(mktemp -d)"

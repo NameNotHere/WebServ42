@@ -10,11 +10,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <time.h>
-#include <cerrno>
-#include <cctype>
 #include <vector>
-#include <string>
-#include <algorithm>
 
 struct CGIRequest
 {
@@ -46,6 +42,31 @@ struct CGIResult
 	std::string raw_output;
 };
 
+struct CgiJob
+{
+	pid_t pid;
+	int stdinFd;
+	int stdoutFd;
+	std::string requestBody;
+	size_t bodyOffset;
+	std::string output;
+	long long deadlineMs;
+	long long killDeadlineMs;
+	int waitStatus;
+	int clientFd;
+	std::string httpVersion;
+	bool keepAlive;
+	bool childReaped;
+	bool outputEof;
+	bool timedOut;
+	bool ioError;
+	bool terminationSent;
+	bool childSignaled;
+	std::string errorMessage;
+
+	CgiJob();
+};
+
 class CgiHandler
 {
 private:
@@ -54,23 +75,24 @@ private:
 
 	std::map<std::string, std::string> buildEnvironment(
 		const CGIRequest& request) const;
-	CGIResult runProcess(
-		const CGIRequest& request,
-		const std::map<std::string, std::string>& environment) const;
 
 public:
 	CgiHandler();
 	CgiHandler(const std::string& interpreter,
 			   unsigned int timeout_seconds = 5);
-	CgiHandler(const CgiHandler& other);
-	CgiHandler& operator=(const CgiHandler& other);
-	~CgiHandler();
 
+	bool isCGI(const std::string& path) const;
 	void setInterpreter(const std::string& interpreter);
 	void setTimeout(unsigned int timeout_seconds);
 
-	bool isCGI(const std::string& path) const;
-	CGIResult execute(const CGIRequest& request) const;
+	bool start(const CGIRequest& request, CgiJob& job) const;
+	void writeInput(CgiJob& job) const;
+	void readOutput(CgiJob& job) const;
+	void pipeError(CgiJob& job, bool inputPipe) const;
+	void update(CgiJob& job) const;
+	bool complete(const CgiJob& job) const;
+	CGIResult result(const CgiJob& job) const;
+	void cancel(CgiJob& job) const;
 };
 
 #endif
