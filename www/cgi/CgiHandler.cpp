@@ -80,6 +80,94 @@ namespace
 		}
 		return "";
 	}
+	bool createCgiPipes(int inputPipe[2], int outputPipe[2])
+	{
+		inputPipe[0] = inputPipe[1] = -1;
+		outputPipe[0] = outputPipe[1] = -1;
+		if (pipe(inputPipe) == -1)
+			return false;
+		if (pipe(outputPipe) == -1)
+		{
+			closeDescriptor(inputPipe[0]);
+			closeDescriptor(inputPipe[1]);
+			return false;
+		}
+		return true;
+	}
+
+	void closeCgiPipes(int inputPipe[2], int outputPipe[2])
+	{
+		closeDescriptor(inputPipe[0]);
+		closeDescriptor(inputPipe[1]);
+		closeDescriptor(outputPipe[0]);
+		closeDescriptor(outputPipe[1]);
+	}
+
+	void buildEnvironmentPointers(
+		const std::map<std::string, std::string>& environment,
+		std::vector<std::string>& envStrings, std::vector<char*>& envp)
+	{
+		for (std::map<std::string, std::string>::const_iterator it = environment.begin();
+			it != environment.end(); ++it)
+			envStrings.push_back(it->first + "=" + it->second);
+		for (size_t i = 0; i < envStrings.size(); ++i)
+			envp.push_back(const_cast<char*>(envStrings[i].c_str()));
+		envp.push_back(NULL);
+	}
+
+	void executeCgiChild(const std::string& interpreter,
+		const std::string& scriptPath, const std::string& argument,
+		std::vector<char*>& envp, int inputPipe[2], int outputPipe[2])
+	{
+		setpgid(0, 0);
+		if (dup2(inputPipe[0], STDIN_FILENO) == -1
+			|| dup2(outputPipe[1], STDOUT_FILENO) == -1)
+			_exit(1);
+		close(inputPipe[0]);
+		close(inputPipe[1]);
+		close(outputPipe[0]);
+		close(outputPipe[1]);
+		if (chdir(scriptDirectory(scriptPath).c_str()) == -1)
+			_exit(126);
+
+		char* argv[3];
+		argv[0] = const_cast<char*>(interpreter.c_str());
+		argv[1] = const_cast<char*>(argument.c_str());
+		argv[2] = NULL;
+		execve(interpreter.c_str(), argv, envp.data());
+		_exit(127);
+	}
+
+	bool configureParentPipes(pid_t pid, int inputPipe[2], int outputPipe[2])
+	{
+		closeDescriptor(inputPipe[0]);
+		closeDescriptor(outputPipe[1]);
+		setpgid(pid, pid);
+		if (!setNonBlocking(inputPipe[1]) || !setNonBlocking(outputPipe[0]))
+		{
+			signalProcessGroup(pid, SIGKILL);
+			closeDescriptor(inputPipe[1]);
+			closeDescriptor(outputPipe[0]);
+			while (waitpid(pid, NULL, 0) == -1 && errno == EINTR) {}
+			return false;
+		}
+		return true;
+	}
+
+	void initializeCgiJob(CgiJob& job, const CGIRequest& request, pid_t pid,
+		int inputPipe[2], int outputPipe[2], unsigned int timeoutSeconds)
+	{
+		job = CgiJob();
+		job.pid = pid;
+		job.stdinFd = inputPipe[1];
+		job.stdoutFd = outputPipe[0];
+		job.requestBody = request.body;
+		job.deadlineMs = nowMilliseconds()
+			+ static_cast<long long>(timeoutSeconds) * 1000;
+		if (job.requestBody.empty())
+			closeDescriptor(job.stdinFd);
+	}
+
 }
 
 CgiJob::CgiJob()
@@ -169,74 +257,31 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 
 bool CgiHandler::start(const CGIRequest& request, CgiJob& job) const
 {
-	int inPipe[2] = { -1, -1 };
-	int outPipe[2] = { -1, -1 };
-	if (pipe(inPipe) == -1)
+	int inputPipe[2] = { -1, -1 };
+	int outputPipe[2] = { -1, -1 };
+	if (!createCgiPipes(inputPipe, outputPipe))
 		return false;
-	if (pipe(outPipe) == -1)
-	{
-		close(inPipe[0]);
-		close(inPipe[1]);
-		return false;
-	}
 
 	std::map<std::string, std::string> environment = buildEnvironment(request);
 	std::vector<std::string> envStrings;
-	for (std::map<std::string, std::string>::const_iterator it = environment.begin();
-		it != environment.end(); ++it)
-		envStrings.push_back(it->first + "=" + it->second);
 	std::vector<char*> envp;
-	for (size_t i = 0; i < envStrings.size(); ++i)
-		envp.push_back(const_cast<char*>(envStrings[i].c_str()));
-	envp.push_back(NULL);
+	buildEnvironmentPointers(environment, envStrings, envp);
 	std::string argument = scriptArgument(request.script_path);
-	char* argv[3];
-	argv[0] = const_cast<char*>(_interpreter.c_str());
-	argv[1] = const_cast<char*>(argument.c_str());
-	argv[2] = NULL;
 
 	pid_t pid = fork();
 	if (pid == -1)
 	{
-		close(inPipe[0]); close(inPipe[1]);
-		close(outPipe[0]); close(outPipe[1]);
+		closeCgiPipes(inputPipe, outputPipe);
 		return false;
 	}
 	if (pid == 0)
-	{
-		setpgid(0, 0);
-		if (dup2(inPipe[0], STDIN_FILENO) == -1
-			|| dup2(outPipe[1], STDOUT_FILENO) == -1)
-			_exit(1);
-		close(inPipe[0]); close(inPipe[1]);
-		close(outPipe[0]); close(outPipe[1]);
-		if (chdir(scriptDirectory(request.script_path).c_str()) == -1)
-			_exit(126);
-		execve(_interpreter.c_str(), argv, envp.data());
-		_exit(127);
-	}
+		executeCgiChild(_interpreter, request.script_path, argument, envp,
+			inputPipe, outputPipe);
 
-	close(inPipe[0]);
-	close(outPipe[1]);
-	setpgid(pid, pid);
-	if (!setNonBlocking(inPipe[1]) || !setNonBlocking(outPipe[0]))
-	{
-		signalProcessGroup(pid, SIGKILL);
-		close(inPipe[1]);
-		close(outPipe[0]);
-		while (waitpid(pid, NULL, 0) == -1 && errno == EINTR) {}
+	if (!configureParentPipes(pid, inputPipe, outputPipe))
 		return false;
-	}
-
-	job = CgiJob();
-	job.pid = pid;
-	job.stdinFd = inPipe[1];
-	job.stdoutFd = outPipe[0];
-	job.requestBody = request.body;
-	job.deadlineMs = nowMilliseconds()
-		+ static_cast<long long>(_timeout_seconds) * 1000;
-	if (job.requestBody.empty())
-		closeDescriptor(job.stdinFd);
+	initializeCgiJob(job, request, pid, inputPipe, outputPipe,
+		_timeout_seconds);
 	return true;
 }
 
