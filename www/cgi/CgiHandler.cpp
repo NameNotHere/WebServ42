@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 namespace
 {
@@ -267,6 +268,10 @@ bool CgiHandler::start(const CGIRequest& request, CgiJob& job) const
 	std::vector<char*> envp;
 	buildEnvironmentPointers(environment, envStrings, envp);
 	std::string argument = scriptArgument(request.script_path);
+	std::string interpreter = request.interpreter.empty()
+		? _interpreter : request.interpreter;
+	if (!interpreter.empty() && interpreter[0] != '/')
+		interpreter = std::filesystem::absolute(interpreter).string();
 
 	pid_t pid = fork();
 	if (pid == -1)
@@ -275,7 +280,7 @@ bool CgiHandler::start(const CGIRequest& request, CgiJob& job) const
 		return false;
 	}
 	if (pid == 0)
-		executeCgiChild(_interpreter, request.script_path, argument, envp,
+		executeCgiChild(interpreter, request.script_path, argument, envp,
 			inputPipe, outputPipe);
 
 	if (!configureParentPipes(pid, inputPipe, outputPipe))

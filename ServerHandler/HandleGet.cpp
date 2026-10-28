@@ -25,7 +25,24 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         return sendErrorResponse(clientFd, version, keepAlive, 400);
 
     const LocationConfig* location =
-    findMatchingLocation(config, decodedTarget);
+        findMatchingLocation(config, decodedTarget);
+    bool redirectToSlash = false;
+
+    if (!decodedTarget.empty()
+        && decodedTarget[decodedTarget.size() - 1] != '/')
+    {
+        const std::string slashTarget = decodedTarget + "/";
+        const LocationConfig* slashLocation =
+            findMatchingLocation(config, slashTarget);
+        if (slashLocation != NULL
+            && slashLocation->path == slashTarget
+            && (location == NULL
+                || slashLocation->path.size() > location->path.size()))
+        {
+            location = slashLocation;
+            redirectToSlash = true;
+        }
+    }
 
     if (!isMethodAllowed(config, location, "GET"))
     {
@@ -37,14 +54,59 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         sendErrorResponse(clientFd, version, keepAlive, 400);
         return false;
     }
+    if (redirectToSlash)
+    {
+        std::ostringstream response;
+        response << version << " 301 Moved Permanently\r\n"
+                 << "Location: " << decodedTarget << "/\r\n"
+                 << "Content-Length: 0\r\n"
+                 << "Connection: close\r\n\r\n";
+        const std::string message = response.str();
+        sendAll(clientFd, message.data(), message.size());
+        return false;
+    }
     const std::string& root =
         (location != NULL && !location->root.empty())
             ? location->root
             : config.root;
 
-    const std::string path = resolveRequestedPath(root, decodedTarget);
+    std::string relativeTarget = decodedTarget;
+    if (location != NULL && location->path.compare(0, 2, "*.") != 0)
+    {
+        relativeTarget = decodedTarget.substr(location->path.size());
+        if (relativeTarget.empty())
+            relativeTarget = "/";
+        else if (relativeTarget[0] != '/')
+            relativeTarget.insert(0, "/");
+    }
+
+    std::string path = root.empty() ? "." : root;
+    if (!path.empty() && path[path.size() - 1] == '/')
+        path.erase(path.size() - 1);
+    path += relativeTarget;
+    if (!path.empty() && path[path.size() - 1] == '/')
+        path += (location != NULL && !location->index.empty())
+            ? location->index
+            : "index.html";
     struct stat st;
-    if (stat(path.c_str(), &st) == -1 || !S_ISREG(st.st_mode))
+    if (stat(path.c_str(), &st) == -1)
+    {
+        sendErrorResponse(clientFd, version, keepAlive, 404);
+        return false;
+    }
+    if (S_ISDIR(st.st_mode) && !decodedTarget.empty()
+        && decodedTarget[decodedTarget.size() - 1] != '/')
+    {
+        std::ostringstream response;
+        response << version << " 301 Moved Permanently\r\n"
+                 << "Location: " << decodedTarget << "/\r\n"
+                 << "Content-Length: 0\r\n"
+                 << "Connection: close\r\n\r\n";
+        const std::string message = response.str();
+        sendAll(clientFd, message.data(), message.size());
+        return false;
+    }
+    if (!S_ISREG(st.st_mode))
     {
         sendErrorResponse(clientFd, version, keepAlive, 404);
         return false;

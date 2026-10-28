@@ -1,6 +1,6 @@
 #include "HttpParser.hpp"
 
-HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request)
+HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request, size_t maxBody)
 {
     _headers.clear();
 
@@ -42,7 +42,7 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
 
     std::cout << "Valid Header\n";
 
-    BodyStatus bodyStatus = body(request);
+    BodyStatus bodyStatus = body(request, maxBody);
 
     if (bodyStatus == BODY_VALID)
     {
@@ -59,6 +59,8 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
         std::cout << "Incomplete Body\n";
         return REQUEST_INCOMPLETE;
     }
+    else if (bodyStatus == BODY_TOO_LARGE)
+        return REQUEST_CONTENT_TOO_LARGE;
     return REQUEST_INVALID;
 }
 

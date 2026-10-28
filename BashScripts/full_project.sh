@@ -138,6 +138,65 @@ else
     render_result_rows
 fi
 printf '%s%s========================================================================%s\n' "$BOLD" "$CYAN" "$RESET"
+print_http_failures() {
+    sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g; s/\r$//' "$HTTP_LOG" | awk '
+        /TEST [0-9]+:/ {
+            if (in_test && failed) printf "%s", block
+            block = $0 ORS
+            in_test = 1
+            failed = 0
+            next
+        }
+        in_test {
+            block = block $0 ORS
+            if ($0 ~ /RESULT:.*FAIL/) failed = 1
+        }
+        END {
+            if (in_test && failed) printf "%s", block
+        }
+    '
+}
+
+print_cgi_failures() {
+    sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g; s/\r$//' "$CGI_LOG" | awk '
+        /^[[:space:]]*✗ / {
+            if (active) printf "%s", block
+            block = $0 ORS
+            active = 1
+            next
+        }
+        active {
+            if ($0 ~ /^[[:space:]]*(✓ |━|[0-9]+ passed)/) {
+                printf "%s", block
+                block = ""
+                active = 0
+            } else {
+                block = block $0 ORS
+            }
+        }
+        END {
+            if (active) printf "%s", block
+        }
+    '
+}
+
+HTTP_FAILURE_DETAILS="$(print_http_failures)"
+CGI_FAILURE_DETAILS="$(print_cgi_failures)"
+if [[ -n "$HTTP_FAILURE_DETAILS" || -n "$CGI_FAILURE_DETAILS" ]]; then
+    printf '\n%s%s========================================================================%s\n' "$BOLD" "$CYAN" "$RESET"
+    printf '%s%s                         FAILED TEST DETAILS%s\n' "$BOLD" "$CYAN" "$RESET"
+    printf '%s%s========================================================================%s\n' "$BOLD" "$CYAN" "$RESET"
+    if [[ -n "$HTTP_FAILURE_DETAILS" ]]; then
+        printf '%s%sHTTP SUITE%s\n' "$BOLD" "$RED" "$RESET"
+        printf '%s\n' "$HTTP_FAILURE_DETAILS"
+    fi
+    if [[ -n "$CGI_FAILURE_DETAILS" ]]; then
+        printf '%s%sCGI SUITE%s\n' "$BOLD" "$RED" "$RESET"
+        printf '%s\n' "$CGI_FAILURE_DETAILS"
+    fi
+    printf '%s%s========================================================================%s\n' "$BOLD" "$CYAN" "$RESET"
+fi
+
 BANNER_WIDTH=72
 if (( HTTP_STATUS == 0 && CGI_STATUS == 0 && HTTP_READY && CGI_READY && HTTP_FAILED == 0 && CGI_FAILED == 0 && HTTP_SKIPPED == 0 && CGI_SKIPPED == 0 )); then
     PASSED_TEXT='✦ 🔥 ALL TESTS PASSED 🔥 ✦'

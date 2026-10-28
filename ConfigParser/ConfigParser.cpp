@@ -54,6 +54,51 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         }
         expect_and_increase(tokens, pos, SEMICOLON);
     }
+    else if (keyword == "index")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.index = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "cgi_path")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.cgi_path = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "upload_dir")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.uploadDir = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "maxBody")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        const std::string& value = tokens[pos - 1].word;
+
+        if (value.empty()
+            || value.find_first_not_of("0123456789") != std::string::npos)
+            throw std::runtime_error("invalid maxBody value");
+
+        unsigned long long limit;
+        try
+        {
+            limit = std::stoull(value);
+        }
+        catch (const std::exception&)
+        {
+            throw std::runtime_error("invalid maxBody value");
+        }
+
+        if (limit == 0
+            || limit > std::numeric_limits<size_t>::max())
+            throw std::runtime_error("maxBody must be a positive size");
+
+        location.maxBody = static_cast<size_t>(limit);
+        location.hasMaxBody = true;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
     else
         throw std::runtime_error("unknown location directive: " + keyword);
 }

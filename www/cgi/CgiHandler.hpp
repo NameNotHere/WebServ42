@@ -16,6 +16,7 @@ struct CGIRequest
 {
 	std::string method;
 	std::string script_path;
+	std::string interpreter;
 	std::string script_name;
 	std::string path_info;
 	std::string query_string;

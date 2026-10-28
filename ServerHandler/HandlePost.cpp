@@ -15,6 +15,17 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
         if (prefix.empty())
             continue;
 
+        if (prefix.size() > 2 && prefix.compare(0, 2, "*.") == 0)
+        {
+            const std::string extension = prefix.substr(1);
+            if (path.size() >= extension.size()
+                && path.compare(path.size() - extension.size(),
+                                extension.size(), extension) == 0
+                && (best == NULL || best->path == "/"))
+                best = &location;
+            continue;
+        }
+
         if (path.compare(0, prefix.size(), prefix) != 0)
             continue;
 
@@ -76,6 +87,17 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
     if (!filename.empty() && filename[0] == '/')
         filename.erase(0, 1);
 
+    if (filename.empty() && !location.uploadDir.empty())
+    {
+        std::string endpoint = prefix;
+        while (!endpoint.empty() && endpoint[endpoint.size() - 1] == '/')
+            endpoint.erase(endpoint.size() - 1);
+
+        size_t slash = endpoint.find_last_of('/');
+        filename = slash == std::string::npos
+            ? endpoint : endpoint.substr(slash + 1);
+    }
+
     // Only allow a single filename, not a path.
     if (filename.empty() ||
         filename == "." ||
@@ -89,7 +111,10 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
 
 int openUploadDirectory(const LocationConfig& location)
 {
-    return open(location.root.c_str(), O_RDONLY | O_DIRECTORY);
+    const std::string& directory =
+        location.uploadDir.empty() ? location.root : location.uploadDir;
+
+    return open(directory.c_str(), O_RDONLY | O_DIRECTORY);
 }
 
 int openUploadFile(int dirFd, const std::string& filename, bool& existed)

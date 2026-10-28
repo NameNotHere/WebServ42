@@ -26,6 +26,16 @@ namespace
     };
 
     std::map<int, ClientOutput> clientOutputs;
+
+    bool targetHasExtension(const std::string& target,
+                            const std::string& extension)
+    {
+        const size_t queryPosition = target.find('?');
+        const std::string path = target.substr(0, queryPosition);
+        return path.size() >= extension.size()
+            && path.compare(path.size() - extension.size(),
+                            extension.size(), extension) == 0;
+    }
 }
 
 std::string toLower(std::string s)
@@ -256,8 +266,19 @@ bool buildResponse(const HttpParser& http, int clientFd,
     else
         keepAlive = (version == "HTTP/1.1");
 
-    if (cgi.isCGI(http.getTarget()))
+    const LocationConfig* location =
+        findMatchingLocation(config, http.getTarget());
+    const bool configuredCgi = location != NULL
+        && location->path.compare(0, 2, "*.") == 0
+        && !location->cgi_path.empty()
+        && targetHasExtension(http.getTarget(), location->path.substr(1));
+
+    if (configuredCgi || cgi.isCGI(http.getTarget()))
     {
+        if (configuredCgi
+            && !isMethodAllowed(config, location, toUpper(http.getMethod())))
+            return sendErrorResponse(clientFd, version, keepAlive, 405);
+
         CGIRequest request;
 
         std::string target = http.getTarget();
@@ -268,7 +289,11 @@ bool buildResponse(const HttpParser& http, int clientFd,
             ? target
             : target.substr(0, queryPosition);
 
-        request.script_path = resolveRequestedPath(config.root, request.script_name);
+        const std::string& root = configuredCgi && !location->root.empty()
+            ? location->root : config.root;
+        request.script_path = resolveRequestedPath(root, request.script_name);
+        if (configuredCgi)
+            request.interpreter = location->cgi_path;
         request.query_string = queryPosition == std::string::npos
             ? ""
             : target.substr(queryPosition + 1);

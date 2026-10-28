@@ -3,21 +3,21 @@
 // Might have to check for empty body which is still valid
 // Will there ever be content length or Transfer-encoding and no body?
 
-HttpParser::BodyStatus HttpParser::body(const std::string& request)
+HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBody)
 {
 	_body.clear();
 	size_t start = request.find("\r\n\r\n");
 	if(start == std::string::npos)
    		return BODY_INVALID;
 
-	std::string body = request.substr(start + 4);
+	const size_t bodyStart = start + 4;
 
 	bool hasContentLength = _headers.find("content-length") != _headers.end();
 	bool hasTransferEncoding = _headers.find("transfer-encoding") != _headers.end();
 
 	if(!hasContentLength && !hasTransferEncoding)
 	{
-    	_requestLength = start + 4;
+    	_requestLength = bodyStart;
     	return BODY_VALID;
 	}
 
@@ -26,8 +26,9 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 
 	if(hasTransferEncoding)
 	{
+		const std::string body = request.substr(bodyStart);
 		size_t bodyLength = 0;
-		BodyStatus status = transferEncoding(body, bodyLength);
+		BodyStatus status = transferEncoding(body, bodyLength, maxBody);
 
 		if(status == BODY_INVALID)
 			return BODY_INVALID;
@@ -44,13 +45,15 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 		it = _headers.find("content-length");
 		// Checked if this fails already in the program
 		unsigned long contentLength = stoul(it->second);
+		if (maxBody != 0 && contentLength > maxBody)
+			return BODY_TOO_LARGE;
 
-		if(contentLength > body.size())
+		if(contentLength > request.size() - bodyStart)
 		{
 			return BODY_INCOMPLETE;
 		}
-		_requestLength = start + 4 + contentLength;
-		_body = body.substr(0, contentLength);
+		_requestLength = bodyStart + contentLength;
+		_body = request.substr(bodyStart, contentLength);
 		std::cout << "Body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
@@ -58,7 +61,7 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request)
 	return BODY_VALID;
 }
 
-HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& body, size_t& bodyLength)
+HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& body, size_t& bodyLength, size_t maxBody)
 {
     size_t pos = 0;
 
@@ -93,6 +96,10 @@ HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& body, siz
             bodyLength = pos;
             return BODY_VALID;
         }
+
+        if (maxBody != 0
+            && (_body.size() > maxBody || digit > maxBody - _body.size()))
+            return BODY_TOO_LARGE;
 
         if (body.size() < pos + digit + 2)
             return BODY_INCOMPLETE;

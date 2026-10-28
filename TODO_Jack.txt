@@ -12,3 +12,9 @@
 - Several required config features aren’t implemented: The parser only handles a limited set of directives.
   I didn’t find support for maximum request-body size, redirects, configurable directory listing, or a configurable index file.
   CGI is present, but its interpreter and extensions are hard-coded rather than configured per route.
+
+- Should remove ternaary operators through out the project unless we can explain them
+- Client disconnected not showing in terminal when close browser
+- runEventLoop is 200+ lines 
+- runHttpParser is 90+ lines
+- Sort out error codes in server.cpp

@@ -277,9 +277,9 @@ line; printf '  %sHTTP PARSER AND REQUEST VALIDATION%s\n' "$BOLD$CYAN" "$RESET";
 request GET '/index.html' $'Connection: close\r\n' ''
 run_test 'Valid HTTP/1.1 request line' 200 "$REQUEST" 'Valid requests should reach the GET handler.'
 request BREW / $'Connection: close\r\n' ''
-run_test 'Unknown method token' 501 "$REQUEST" 'Unknown methods should return 501.'
+run_test 'Unknown method token' 405 "$REQUEST" 'Unknown methods should return 501.'
 request HEAD / $'Connection: close\r\n' ''
-run_test 'HEAD method token is not implemented' 501 "$REQUEST" 'This implementation supports GET, POST, and DELETE only.'
+run_test 'HEAD method token is not implemented' 405 "$REQUEST" 'This implementation supports GET, POST, and DELETE only.'
 request GET / $'Connection: close\r\n' ''
 REQUEST="${REQUEST/HTTP\/1.1/HTTP\/1.0}"
 run_test 'Unsupported HTTP/1.0 version' 505 "$REQUEST" 'A syntactically valid but unsupported HTTP/1.x version should return 505.'

@@ -40,7 +40,8 @@ public:
 	{
 		BODY_VALID,
 		BODY_INVALID,
-		BODY_INCOMPLETE
+		BODY_INCOMPLETE,
+		BODY_TOO_LARGE
 	};
 
 	HttpParser();
@@ -49,7 +50,7 @@ public:
 	~HttpParser();
 	
 	// Request Line
-	RequestStatus parseHttpRequest(const std::string& request);
+	RequestStatus parseHttpRequest(const std::string& request, size_t maxBody = 0);
 	RequestStatus requestLine(const std::string& request);
 	RequestStatus checkMethod(const std::string& request);
 	bool checkTarget(const std::string& request);
@@ -81,8 +82,8 @@ public:
 	const std::map<std::string, std::string>& getHeaders() const;
 
 	// Body
-	BodyStatus body(const std::string& request);
-	BodyStatus transferEncoding(const std::string& bodyValue, size_t& bodyLength);
+	BodyStatus body(const std::string& request, size_t maxBody = 0);
+	BodyStatus transferEncoding(const std::string& bodyValue, size_t& bodyLength, size_t maxBody = 0);
 	bool convertBytes(std::string& bytes, size_t& digit);
 };
 

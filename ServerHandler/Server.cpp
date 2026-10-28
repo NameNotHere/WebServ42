@@ -363,21 +363,48 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
     {
         if (reqs[fd].find("\r\n\r\n") == std::string::npos)
         {
-            if (reqs[fd].find('\n') != std::string::npos
-                || reqs[fd].find('\r') != std::string::npos)
+            std::cout << "Request:" << reqs[fd] << "\n";
+            const std::string& request = reqs[fd];
+
+            for (std::string::size_type i = 0; i < request.size(); ++i)
             {
-                std::string response = Response::create(400, "");
-                sendAll(fd, response.data(), response.size());
-                closeAfterPendingOutput(fd);
-                reqs.erase(fd);
-                clientConfigs.erase(fd);
-                return;
+                if (request[i] == '\n'
+                    && (i == 0 || request[i - 1] != '\r'))
+                {
+                    std::string response = Response::create(400, "");
+                    sendAll(fd, response.data(), response.size());
+                    closeAfterPendingOutput(fd);
+                    reqs.erase(fd);
+                    clientConfigs.erase(fd);
+                    return;
+                }
             }
             std::cout << "REQUEST INCOMPLETE\n";
             return;
         }
 
-        HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd]);
+        size_t maxBody = 0;
+        const std::string& rawRequest = reqs[fd];
+        size_t firstSpace = rawRequest.find(' ');
+        size_t secondSpace = firstSpace == std::string::npos
+            ? std::string::npos
+            : rawRequest.find(' ', firstSpace + 1);
+
+        if (firstSpace != std::string::npos
+            && secondSpace != std::string::npos)
+        {
+            std::string target = rawRequest.substr(
+                firstSpace + 1, secondSpace - firstSpace - 1);
+
+            const LocationConfig* location =
+                findMatchingLocation(clientConfigs.at(fd), target);
+
+            if (location != NULL && location->hasMaxBody)
+                maxBody = location->maxBody;
+        }
+
+        HttpParser::RequestStatus status =
+            http.parseHttpRequest(reqs[fd], maxBody);
         if (status == HttpParser::REQUEST_VALID)
         {
             size_t requestLen = http.getRequestLength();
@@ -401,9 +428,11 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         {
             int code = 400;
             if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED) code = 405;
-            else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
+            else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
+            // else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
             else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND) code = 404;
             else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED) code = 505;
+            else if (status == HttpParser::REQUEST_CONTENT_TOO_LARGE) code = 413;
             std::string response = Response::create(code, "");
             sendAll(fd, response.data(), response.size());
             closeAfterPendingOutput(fd);
