@@ -140,11 +140,11 @@ fi
 printf '%s%s========================================================================%s\n' "$BOLD" "$CYAN" "$RESET"
 BANNER_WIDTH=72
 if (( HTTP_STATUS == 0 && CGI_STATUS == 0 && HTTP_READY && CGI_READY && HTTP_FAILED == 0 && CGI_FAILED == 0 && HTTP_SKIPPED == 0 && CGI_SKIPPED == 0 )); then
-    PASSED_TEXT='✦ 🔥 ALL CHECKS PASSED 🔥 ✦'
+    PASSED_TEXT='✦ 🔥 ALL TESTS PASSED 🔥 ✦'
     LEGENDS_TEXT='🍆💦 YOU FUCKING LEGENDS 🍆💦'
     LEGENDS_DRY_TEXT='🍆   YOU FUCKING LEGENDS 🍆  '
     PASSED_PADDING=$(( (BANNER_WIDTH - $(printf '%s\n' "$PASSED_TEXT" | wc -L)) / 2 ))
-    printf '%*s%s%s✦ 🔥%s %sALL CHECKS PASSED%s %s🔥 ✦%s\n' \
+    printf '%*s%s%s✦ 🔥%s %sALL TESTS PASSED%s %s🔥 ✦%s\n' \
         "$PASSED_PADDING" '' "$BOLD" "$YELLOW" "$RESET" "$BOLD$GREEN" "$RESET" "$YELLOW" "$RESET"
     LEGENDS_PADDING=$(( (BANNER_WIDTH - $(printf '%s\n' "$LEGENDS_TEXT" | wc -L)) / 2 ))
     print_legend_frame() {

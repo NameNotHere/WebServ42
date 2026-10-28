@@ -147,6 +147,7 @@ print(bar())
 # variables on the configured /cgi/ route without changing the teammate's tests.
 probe_path = None
 probe_name = None
+extra_probe_paths = []
 cgi_dir = os.path.join(root, "www", "cgi")
 try:
     fd, probe_path = tempfile.mkstemp(prefix=".suite_probe_", suffix=".py", dir=cgi_dir)
@@ -193,6 +194,21 @@ if probe_name:
         "5\r\nhello\r\n0\r\n\r\n"
     ).encode("ascii")
     run("Valid chunked POST is decoded for CGI", chunked, 200, b"BODY_HEX=68656c6c6f", "A valid chunked request should be decoded before its body is passed to CGI.")
+
+    # CGI output may omit Content-Length; Webserv should frame its HTTP response
+    # from the CGI body. A malformed CGI header block should fail cleanly.
+    for prefix, source in (
+        (".suite_no_length_", "import sys\nsys.stdout.write('Content-Type: text/plain\\n\\nCGI_NO_LENGTH_OK')\n"),
+        (".suite_bad_header_", "import sys\nsys.stdout.write('Not-A-Header\\n\\nBAD')\n"),
+    ):
+        fd, extra_path = tempfile.mkstemp(prefix=prefix, suffix=".py", dir=cgi_dir)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(source)
+        extra_probe_paths.append(extra_path)
+    no_length_name = os.path.basename(extra_probe_paths[0])
+    bad_header_name = os.path.basename(extra_probe_paths[1])
+    run("CGI output without Content-Length is framed correctly", request_bytes("GET", "/cgi/" + no_length_name), 200, b"CGI_NO_LENGTH_OK", "CGI output does not need to provide Content-Length; the server must produce a complete HTTP response.")
+    run("Malformed CGI response headers return HTTP 500", request_bytes("GET", "/cgi/" + bad_header_name), 500, why="Invalid CGI output headers must be rejected without crashing or hanging the server.")
 
     malformed_cl = (f"POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Length: nope\r\nConnection: close\r\n\r\nbody").encode("ascii")
     run("Malformed Content-Length is rejected", malformed_cl, 400, why="Non-numeric Content-Length must be rejected before starting a CGI process.")
@@ -280,6 +296,11 @@ except Exception as exc:
 if probe_path:
     try:
         os.unlink(probe_path)
+    except OSError:
+        pass
+for path in extra_probe_paths:
+    try:
+        os.unlink(path)
     except OSError:
         pass
 

@@ -9,6 +9,10 @@
 #include <fstream>
 #include <vector>
 #include <map>
+#include <iostream>
+#include <cstdlib>
+#include <filesystem>
+#include <cctype>
 
 enum CONF_TOKEN
 {
@@ -39,6 +43,11 @@ struct LocationConfig
     std::string root;
     std::string index;
     std::string uploadDir;
+    std::string cgi_path;
+    size_t maxBody;
+    bool hasMaxBody;
+
+    LocationConfig() : maxBody(0), hasMaxBody(false) {}
 };
 
 struct ServerConfig

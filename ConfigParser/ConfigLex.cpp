@@ -1,6 +1,4 @@
 #include "Configuration.hpp"
-#include <iostream>
-#include <cctype>
 
 std::vector<Token> lex(const std::string& text)
 {

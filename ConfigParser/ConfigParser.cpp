@@ -1,10 +1,4 @@
 #include "Configuration.hpp"
-#include <iostream>
-#include <cstdlib>
-#include <string>
-#include <fstream>
-#include <vector>
-#include <filesystem>
 
 void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, ServerConfig& server)
 {

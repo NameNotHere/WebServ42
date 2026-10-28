@@ -24,8 +24,10 @@ cleanup() {
         "$UPLOAD_DIR/$ID-post.txt" "$UPLOAD_DIR/$ID-empty.txt" \
         "$UPLOAD_DIR/$ID-overwrite.txt" "$UPLOAD_DIR/$ID-chunked.txt" \
         "$UPLOAD_DIR/$ID-query.txt" "$UPLOAD_DIR/$ID-multichunk.txt" \
-        "$WWW_DIR/$ID-space name.txt" \
+        "$WWW_DIR/$ID-space name.txt" "$WWW_DIR/$ID-dir/child.txt" \
+        "$WWW_DIR/$ID-slow.bin" "$UPLOAD_DIR/$ID-partial.txt" \
         "$UPLOAD_DIR/$ID-binary.bin"
+  rmdir "$WWW_DIR/$ID-dir" 2>/dev/null || true
   rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM
@@ -35,45 +37,150 @@ line() { printf '%s%s%s\n' "$BOLD$CYAN" '=======================================
 # Raw HTTP over a short-lived TCP connection. Python is used only for reliable
 # socket timeouts and byte-preserving sends; test orchestration/output is Bash.
 cat > "$TMP/client.py" <<'PY'
-import socket, sys
+import os, socket, sys
 host, port = sys.argv[1], int(sys.argv[2])
 data = sys.stdin.buffer.read()
 try:
     sock = socket.create_connection((host, port), timeout=1.5)
     sock.settimeout(1.5)
     sock.sendall(data)
+    if os.environ.get('HALF_CLOSE') == '1': sock.shutdown(socket.SHUT_WR)
     response = bytearray()
+    closed = False
     while len(response) < 65536:
         try: block = sock.recv(4096)
         except socket.timeout: break
-        if not block: break
+        if not block:
+            closed = True
+            break
         response.extend(block)
     sys.stdout.buffer.write(response)
+    if closed and not response:
+        print('CONNECTION CLOSED WITHOUT RESPONSE', file=sys.stderr)
     sock.close()
 except Exception as exc:
     print(f'CONNECTION ERROR: {exc}', file=sys.stderr)
 PY
 
+cat > "$TMP/event_probe.py" <<'PY'
+import os, pathlib, socket, sys, threading, time
+host, port, www, uploads, ident, mode = sys.argv[1], int(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]), sys.argv[5], sys.argv[6]
+def response(path, timeout=2):
+    with socket.create_connection((host, port), timeout=timeout) as s:
+        s.settimeout(timeout)
+        s.sendall(f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n".encode())
+        return s.recv(4096)
+if mode == "slow_get":
+    path = www / (ident + "-slow.bin")
+    with path.open("wb") as f:
+        block = b"x" * (1024 * 1024)
+        for _ in range(16): f.write(block)
+    started = threading.Event(); release = threading.Event(); state = {}
+    def slow_reader():
+        try:
+            s = socket.create_connection((host, port), timeout=2); s.settimeout(2)
+            s.sendall(f"GET /{path.name} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n".encode())
+            first = s.recv(1024); state["status"] = first.split(b"\r\n", 1)[0]; started.set()
+            release.wait(2); s.close()
+        except Exception as e: state["error"] = str(e); started.set()
+    t = threading.Thread(target=slow_reader, daemon=True); t.start()
+    if not started.wait(2): raise SystemExit("large GET did not start")
+    time.sleep(0.08)
+    begin = time.monotonic(); fast = response("/"); elapsed = time.monotonic() - begin
+    active = t.is_alive(); release.set(); t.join(2)
+    ok = state.get("status", b"").startswith(b"HTTP/1.1 200") and active and fast.startswith(b"HTTP/1.1 200") and elapsed < 1.25
+    print(f"large download active={active}; second GET={fast.splitlines()[0].decode(errors='replace') if fast else 'no response'}; headers={elapsed:.3f}s")
+    path.unlink(missing_ok=True)
+    raise SystemExit(0 if ok else 1)
+if mode == "partial_post":
+    name = ident + "-partial.txt"; path = uploads / name
+    path.unlink(missing_ok=True)
+    s = socket.create_connection((host, port), timeout=2); s.settimeout(2)
+    s.sendall(f"POST /upload/{name} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Length: 4096\r\nConnection: close\r\n\r\npartial".encode())
+    s.close(); time.sleep(0.08)
+    fast = response("/")
+    ok = fast.startswith(b"HTTP/1.1 200") and not path.exists()
+    print(f"second GET={fast.splitlines()[0].decode(errors='replace') if fast else 'no response'}; incomplete upload exists={path.exists()}")
+    path.unlink(missing_ok=True)
+    raise SystemExit(0 if ok else 1)
+PY
+
+run_event_test() {
+  local title="$1" mode="$2" reason="$3" output status
+  TOTAL=$((TOTAL + 1)); printf '\n'; line
+  printf '  %sTEST %02d: %s%s\n' "$BOLD$MAGENTA" "$TOTAL" "$title" "$RESET"; line
+  if [[ "$mode" == slow_get ]]; then
+    printf '  INPUT   : hold a 16 MiB download open, then request / from a second client\n'
+    printf '  EXPECTED: %ssecond client receives HTTP 200 in under 1.25s while download is active%s\n' "$YELLOW" "$RESET"
+  else
+    printf '  INPUT   : send a partial 4,096-byte POST, disconnect, then request /\n'
+    printf '  EXPECTED: %ssecond client gets HTTP 200; incomplete upload file is absent%s\n' "$YELLOW" "$RESET"
+  fi
+  output="$(python3 "$TMP/event_probe.py" "$HOST" "$PORT" "$WWW_DIR" "$UPLOAD_DIR" "$ID" "$mode" 2>&1)"; status=$?
+  printf '  ACTUAL  : %s\n' "$output"
+  if (( status == 0 )); then printf '  RESULT  : %s✓ PASS%s\n' "$GREEN" "$RESET"; PASS=$((PASS + 1))
+  else printf '  RESULT  : %s✗ FAIL%s\n  REASON  : %s\n' "$RED" "$RESET" "$reason"; FAIL=$((FAIL + 1)); fi
+}
+
+run_binary_upload_test() {
+  local output status
+  TOTAL=$((TOTAL + 1)); printf '\n'; line
+  printf '  %sTEST %02d: POST binary upload preserves every byte%s\n' "$BOLD$MAGENTA" "$TOTAL" "$RESET"; line
+  printf '  INPUT   : 1,024-byte payload containing all byte values 0x00–0xFF\n'
+  printf '  EXPECTED: HTTP 201 and exact saved-byte match\n'
+  output="$(python3 - "$HOST" "$PORT" "$UPLOAD_DIR/$ID-binary.bin" "$ID-binary.bin" <<'PY'
+import pathlib, socket, sys
+host, port, destination, name = sys.argv[1], int(sys.argv[2]), pathlib.Path(sys.argv[3]), sys.argv[4]
+body = bytes(range(256)) * 4
+head = (f"POST /upload/{name} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/octet-stream\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode()
+with socket.create_connection((host, port), timeout=2) as s:
+    s.settimeout(2); s.sendall(head + body); chunks=[]
+    while True:
+        try: block=s.recv(4096)
+        except socket.timeout: break
+        if not block: break
+        chunks.append(block)
+response=b"".join(chunks); status=response.split(b"\r\n",1)[0].decode(errors="replace") if response else "no response"
+matches=destination.exists() and destination.read_bytes()==body
+print(f"status={status}; saved bytes={destination.stat().st_size if destination.exists() else 'missing'}; exact match={matches}")
+raise SystemExit(0 if status.startswith("HTTP/1.1 201") and matches else 1)
+PY
+)"; status=$?
+  printf '  ACTUAL  : %s\n' "$output"
+  if (( status == 0 )); then printf '  RESULT  : %s✓ PASS%s\n' "$GREEN" "$RESET"; PASS=$((PASS + 1))
+  else printf '  RESULT  : %s✗ FAIL%s\n  REASON  : Binary upload handling must preserve NUL and high-bit bytes exactly.\n' "$RED" "$RESET"; FAIL=$((FAIL + 1)); fi
+}
+
 ACTUAL_STATUS=000; ACTUAL_RESPONSE=''; DETAIL=''
 run_test() {
-  local name="$1" expected="$2" request="$3" reason="$4" body_expected="${5:-}"
+  local name="$1" expected="$2" request="$3" reason="$4" body_expected="${5:-}" header_expected="${6:-}" preserve_path="${7:-}" half_close="${8:-0}" allow_close="${9:-0}"
   local input_hex
   TOTAL=$((TOTAL + 1))
   printf '\n'; line
   printf '  %sTEST %02d: %s%s\n' "$BOLD$MAGENTA" "$TOTAL" "$name" "$RESET"
   line
-  printf '  EXPECTED: %sHTTP %s%s\n' "$YELLOW" "$expected" "$RESET"
+  if [[ "$allow_close" == 1 ]]; then
+    printf '  EXPECTED: %sHTTP %s, or connection close without a response%s\n' "$YELLOW" "$expected" "$RESET"
+  else
+    printf '  EXPECTED: %sHTTP %s%s\n' "$YELLOW" "$expected" "$RESET"
+  fi
   if [[ -n "$body_expected" ]]; then printf '  EXPECTED BODY: %scontains "%s"%s\n' "$YELLOW" "$body_expected" "$RESET"; fi
+  if [[ -n "$header_expected" ]]; then printf '  EXPECTED HEADER: %s%s%s\n' "$YELLOW" "$header_expected" "$RESET"; fi
   printf '\n  INPUT (visible control characters):\n'
   printf '%s' "$request" | od -An -tc -w72 | sed 's/^/     /'
   : > "$TMP/response"; : > "$TMP/detail"
-  printf '%s' "$request" | python3 "$TMP/client.py" "$HOST" "$PORT" > "$TMP/response" 2> "$TMP/detail" || true
+  printf '%s' "$request" | HALF_CLOSE="$half_close" python3 "$TMP/client.py" "$HOST" "$PORT" > "$TMP/response" 2> "$TMP/detail" || true
   ACTUAL_RESPONSE="$(cat "$TMP/response")"
   DETAIL="$(cat "$TMP/detail")"
   ACTUAL_STATUS="$(printf '%s\n' "$ACTUAL_RESPONSE" | head -n1 | awk '{print $2}')"
   [[ -n "$ACTUAL_STATUS" ]] || ACTUAL_STATUS=000
   local status_color="$RED"; [[ "$ACTUAL_STATUS" == "$expected" ]] && status_color="$GREEN"
-  printf '  ACTUAL  : %sHTTP %s%s\n' "$status_color" "$ACTUAL_STATUS" "$RESET"
+  if [[ "$allow_close" == 1 && "$ACTUAL_STATUS" == 000 && "$DETAIL" == *'CONNECTION CLOSED WITHOUT RESPONSE'* ]]; then status_color="$GREEN"; fi
+  if [[ "$allow_close" == 1 && "$ACTUAL_STATUS" == 000 && "$DETAIL" == *'CONNECTION CLOSED WITHOUT RESPONSE'* ]]; then
+    printf '  ACTUAL  : %sconnection closed without response%s\n' "$status_color" "$RESET"
+  else
+    printf '  ACTUAL  : %sHTTP %s%s\n' "$status_color" "$ACTUAL_STATUS" "$RESET"
+  fi
   printf '\n  RESPONSE:\n'
   if [[ -n "$ACTUAL_RESPONSE" ]]; then
     printf '%s\n' "$ACTUAL_RESPONSE" | head -c 700 | sed 's/^/      /'
@@ -83,12 +190,16 @@ run_test() {
   else printf '      [no response]\n'; fi
   local ok=1
   [[ "$ACTUAL_STATUS" == "$expected" ]] || ok=0
+  if [[ "$allow_close" == 1 && "$ACTUAL_STATUS" == 000 && "$DETAIL" == *'CONNECTION CLOSED WITHOUT RESPONSE'* ]]; then ok=1; fi
   if [[ -n "$body_expected" && "$ACTUAL_RESPONSE" != *"$body_expected"* ]]; then ok=0; fi
+  if [[ -n "$header_expected" ]] && ! grep -Fqi "$header_expected" "$TMP/response"; then ok=0; fi
+  if [[ -n "$preserve_path" && ! -f "$preserve_path" ]]; then ok=0; fi
   if (( ok )); then
     printf '\n  RESULT: %s✓ PASS%s\n' "$GREEN" "$RESET"; PASS=$((PASS + 1))
   else
     printf '\n  RESULT: %s✗ FAIL%s\n' "$RED" "$RESET"
     printf '  REASON: Expected HTTP %s, received HTTP %s. %s\n' "$expected" "$ACTUAL_STATUS" "$reason"
+    [[ -z "$preserve_path" || -f "$preserve_path" ]] || printf '  DETAIL: Expected fixture to remain present: %s\n' "$preserve_path"
     [[ -n "$DETAIL" ]] && printf '  DETAIL: %s\n' "$DETAIL"
     FAIL=$((FAIL + 1))
   fi
@@ -186,6 +297,10 @@ run_test 'Empty Content-Length' 400 $'POST /upload/x HTTP/1.1\r\nHost: localhost
 run_test 'Duplicate Content-Length headers' 400 $'POST /upload/x HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n' 'Duplicate Content-Length headers are rejected.'
 run_test 'Unsupported transfer encoding' 400 $'POST /upload/x HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: gzip\r\nConnection: close\r\n\r\n' 'This server accepts only chunked transfer encoding.'
 run_test 'Malformed chunk terminator' 400 $'POST /upload/x HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nhelloX\n0\r\n\r\n' 'Each chunk must end with CRLF.'
+run_test 'Bare LF line endings' 400 $'GET / HTTP/1.1\nHost: localhost\nConnection: close\n\n' 'HTTP message lines must use CRLF delimiters.'
+run_test 'Request line has too few fields' 400 $'GET /\r\nHost: localhost\r\nConnection: close\r\n\r\n' 'The request line must contain method, target, and HTTP version.'
+run_test 'Invalid character in header name' 400 $'GET / HTTP/1.1\r\nHost: localhost\r\nBad Header: value\r\nConnection: close\r\n\r\n' 'Header field names cannot contain spaces.'
+run_test 'Chunked body missing terminal chunk' 400 $'POST /upload/x HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nhello\r\n' 'A chunked body must end with the zero-sized chunk.' '' '' '' 1 1
 
 # GET cases
 line; printf '  %sGET%s\n' "$BOLD$CYAN" "$RESET"; line
@@ -211,6 +326,17 @@ run_test 'Mixed-case GET method token' 200 "$MIXED_METHOD_REQUEST" 'HTTP method 
 printf 'encoded filename body\n' > "$WWW_DIR/$ID-space name.txt"
 request GET "/$ID-space%20name.txt" $'Connection: close\r\n'
 run_test 'GET percent-encoded space in filename' 200 "$REQUEST" 'A valid percent-encoded space should resolve to the existing file.' 'encoded filename body'
+request GET '/' $'Connection: close\r\n' ''
+run_test 'GET root directory resolves its index page' 200 "$REQUEST" 'The configured document root index should be returned for /.' '<title>Webserv</title>'
+request GET '/.webserv-suite-no-such-dir/' $'Connection: close\r\n' ''
+run_test 'GET missing directory' 404 "$REQUEST" 'A directory that does not exist under the document root should return 404.'
+request GET '/index.html' $'Connection: close\r\n' ''
+run_test 'GET HTML response declares content type' 200 "$REQUEST" 'Static HTML should be sent with an HTML Content-Type header.' '' 'Content-Type: text/html'
+SAVED_PORT="$PORT"
+PORT=8080
+request GET '/index.html' $'Connection: close\r\n' ''
+run_test 'Second configured port serves the same site' 200 "$REQUEST" 'The second listen port in epic.conf should serve its configured document root.' '<title>Webserv</title>'
+PORT="$SAVED_PORT"
 
 # POST cases
 line; printf '  %sPOST%s\n' "$BOLD$CYAN" "$RESET"; line
@@ -220,6 +346,7 @@ run_test 'POST to root is disallowed' 405 "$REQUEST" 'Root location has no POST 
 request POST "/upload/$ID-post.txt" $'Content-Type: text/plain\r\nContent-Length: 26\r\n' $'Hello from intense suite!\n'
 run_test 'POST creates a new upload' 201 "$REQUEST" 'Allowed POST with a filename should create a file.'
 check_file 'POST upload bytes are preserved' "$UPLOAD_DIR/$ID-post.txt" "$TMP/post-body"
+run_binary_upload_test
 : > "$TMP/empty-body"
 request POST "/upload/$ID-empty.txt" $'Content-Length: 0\r\n'
 run_test 'POST zero-length body' 201 "$REQUEST" 'A zero-length body with a valid filename should create an empty file.'
@@ -248,6 +375,8 @@ request POST "/upload/$ID-multichunk.txt" $'Transfer-Encoding: chunked\r\n' $'5\
 run_test 'POST multiple valid chunks' 201 "$REQUEST" 'All valid chunks should be decoded and saved in order.'
 printf 'hello world' > "$TMP/multichunk-body"
 check_file 'Multi-chunk upload bytes are preserved' "$UPLOAD_DIR/$ID-multichunk.txt" "$TMP/multichunk-body"
+run_event_test 'Second client responds during a large static GET' slow_get 'A slow static-file client must not block the event loop from serving another client.'
+run_event_test 'Partial POST disconnect leaves no upload behind' partial_post 'An incomplete request body must not create a partial upload, and the server must remain responsive.'
 
 # DELETE: epic.conf does not allow DELETE, so 405 is the configured expectation.
 line; printf '  %sDELETE%s\n' "$BOLD$CYAN" "$RESET"; line
@@ -257,6 +386,10 @@ run_test 'DELETE removes an existing file' 204 "$REQUEST" 'With DELETE enabled, 
 check_absent 'DELETE removes the fixture' "$WWW_DIR/$ID-delete.txt"
 request DELETE "/$ID-missing.txt" $'Connection: close\r\n'
 run_test 'DELETE missing file' 404 "$REQUEST" 'With DELETE enabled, a missing target should return 404.'
+mkdir -p "$WWW_DIR/$ID-dir"
+printf 'keep this child\n' > "$WWW_DIR/$ID-dir/child.txt"
+request DELETE "/$ID-dir" $'Connection: close\r\n'
+run_test 'DELETE directory is rejected' 403 "$REQUEST" 'The server should refuse directory deletion.' '' '' "$WWW_DIR/$ID-dir/child.txt"
 
 # CGI cases
 line; printf '  %sCGI%s\n' "$BOLD$CYAN" "$RESET"; line
