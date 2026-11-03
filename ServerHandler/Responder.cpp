@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <sys/uio.h>
 
 namespace
 {
@@ -130,6 +131,50 @@ bool flushPendingOutput(int clientFd)
 
         if (segment.offset < segment.bytes.size())
         {
+            if (!segment.isFile)
+            {
+                struct iovec vectors[16];
+                size_t vectorCount = 0;
+                for (std::deque<OutputSegment>::const_iterator it =
+                         output->second.segments.begin();
+                     it != output->second.segments.end() && vectorCount < 16;
+                     ++it)
+                {
+                    if (it->isFile)
+                        break;
+                    vectors[vectorCount].iov_base = const_cast<char*>(
+                        it->bytes.data() + it->offset);
+                    vectors[vectorCount].iov_len = it->bytes.size() - it->offset;
+                    ++vectorCount;
+                }
+
+                struct msghdr message;
+                std::memset(&message, 0, sizeof(message));
+                message.msg_iov = vectors;
+                message.msg_iovlen = vectorCount;
+                ssize_t sent = sendmsg(clientFd, &message, 0);
+                if (sent <= 0)
+                    return sent < 0;
+
+                size_t remaining = static_cast<size_t>(sent);
+                while (remaining > 0 && !output->second.segments.empty())
+                {
+                    OutputSegment& pending = output->second.segments.front();
+                    size_t available = pending.bytes.size() - pending.offset;
+                    if (remaining >= available)
+                    {
+                        remaining -= available;
+                        output->second.segments.pop_front();
+                    }
+                    else
+                    {
+                        pending.offset += remaining;
+                        remaining = 0;
+                    }
+                }
+                return true;
+            }
+
             ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                                 segment.bytes.size() - segment.offset, 0);
             if (sent <= 0)
@@ -324,7 +369,9 @@ bool buildResponse(HttpParser& http, int clientFd,
         request.server_port = http.getPortNum();
 
         CgiJob job;
-        if (!cgi.start(request, job))
+        const unsigned int timeoutSeconds = request.body.size() >= 8 * 1024 * 1024
+            ? 30 : 5;
+        if (!cgi.start(request, job, timeoutSeconds))
             return sendErrorResponse(clientFd, version, keepAlive, 500);
         job.clientFd = clientFd;
         job.httpVersion = version;

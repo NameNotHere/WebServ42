@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <set>
 
 namespace
 {
@@ -16,6 +17,24 @@ namespace
         int fd;
         int clientFd;
     };
+
+    const size_t LARGE_POST_THRESHOLD = 8 * 1024 * 1024;
+    const size_t MAX_BUFFERED_LARGE_POSTS = 3;
+    std::set<int> largePostClients;
+
+    bool isLargePost(const HttpParser& http)
+    {
+        if (http.getMethod() != "POST")
+            return false;
+        const std::map<std::string, std::string>& headers = http.getHeaders();
+        if (headers.find("transfer-encoding") != headers.end())
+            return true;
+        std::map<std::string, std::string>::const_iterator it = headers.find("content-length");
+        if (it == headers.end())
+            return false;
+        try { return std::stoull(it->second) > LARGE_POST_THRESHOLD; }
+        catch (const std::exception&) { return false; }
+    }
 
     bool setNonBlocking(int fd)
     {
@@ -38,6 +57,7 @@ namespace
         clearPendingOutput(fd);
         requests.erase(fd);
         configs.erase(fd);
+        largePostClients.erase(fd);
         for (size_t i = 0; i < fds.size(); ++i)
         {
             if (fds[i].fd == fd)
@@ -171,7 +191,9 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             int fd = fds[i].fd;
             fds[i].events = 0;
             if (cgiJobs.find(fd) == cgiJobs.end()
-                && !shouldCloseAfterOutput(fd))
+                && !shouldCloseAfterOutput(fd)
+                && (largePostClients.count(fd)
+                    || largePostClients.size() < MAX_BUFFERED_LARGE_POSTS))
                 fds[i].events |= POLLIN;
             if (hasPendingOutput(fd))
                 fds[i].events |= POLLOUT;
@@ -311,6 +333,9 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                     removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
                 continue;
             }
+            if (!largePostClients.count(fd)
+                && largePostClients.size() >= MAX_BUFFERED_LARGE_POSTS)
+                continue;
             char buffer[65536];
             ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
             if (bytesRead == 0)
@@ -344,6 +369,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             bool keepAlive = job->second.keepAlive;
             cgi.cancel(job->second);
             cgiJobs.erase(job);
+            largePostClients.erase(clientFd);
             if (!keepAlive)
                 closeAfterPendingOutput(clientFd);
             else if (reqs.find(clientFd) != reqs.end()
@@ -409,6 +435,8 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
             size_t requestLen = http.getRequestLength();
             buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
             reqs[fd].erase(0, requestLen);
+            if (cgiJobs.find(fd) == cgiJobs.end())
+                largePostClients.erase(fd);
             if (cgiJobs.find(fd) != cgiJobs.end())
             {
                 if (reqs[fd].empty())
@@ -426,7 +454,11 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
                 return;
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
+        {
+            if (isLargePost(http))
+                largePostClients.insert(fd);
             return;
+        }
         else
         {
             int code = 400;

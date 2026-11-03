@@ -261,6 +261,12 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 
 bool CgiHandler::start(CGIRequest& request, CgiJob& job) const
 {
+	return start(request, job, _timeout_seconds);
+}
+
+bool CgiHandler::start(CGIRequest& request, CgiJob& job,
+	unsigned int timeout_seconds) const
+{
 	int inputPipe[2] = { -1, -1 };
 	int outputPipe[2] = { -1, -1 };
 	if (!createCgiPipes(inputPipe, outputPipe))
@@ -289,7 +295,7 @@ bool CgiHandler::start(CGIRequest& request, CgiJob& job) const
 	if (!configureParentPipes(pid, inputPipe, outputPipe))
 		return false;
 	initializeCgiJob(job, request, pid, inputPipe, outputPipe,
-		_timeout_seconds);
+		timeout_seconds);
 	return true;
 }
 
