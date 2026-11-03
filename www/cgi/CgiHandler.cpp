@@ -5,10 +5,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <utility>
 
 namespace
 {
-	const size_t MAX_CGI_OUTPUT = 16 * 1024 * 1024;
+	const size_t MAX_CGI_OUTPUT = 128 * 1024 * 1024;
 	const long long KILL_GRACE_MS = 1000;
 
 	long long nowMilliseconds()
@@ -155,14 +156,14 @@ namespace
 		return true;
 	}
 
-	void initializeCgiJob(CgiJob& job, const CGIRequest& request, pid_t pid,
+	void initializeCgiJob(CgiJob& job, CGIRequest& request, pid_t pid,
 		int inputPipe[2], int outputPipe[2], unsigned int timeoutSeconds)
 	{
 		job = CgiJob();
 		job.pid = pid;
 		job.stdinFd = inputPipe[1];
 		job.stdoutFd = outputPipe[0];
-		job.requestBody = request.body;
+		job.requestBody = std::move(request.body);
 		job.deadlineMs = nowMilliseconds()
 			+ static_cast<long long>(timeoutSeconds) * 1000;
 		if (job.requestBody.empty())
@@ -224,8 +225,10 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 	env["SERVER_SOFTWARE"] = request.server_software;
 	env["REQUEST_METHOD"] = request.method;
 	env["SCRIPT_FILENAME"] = request.script_path;
-	env["SCRIPT_NAME"] = request.script_name.empty()
-		? request.script_path : request.script_name;
+	if (request.script_name.empty() && request.path_info.empty())
+		env["SCRIPT_NAME"] = request.script_path;
+	else
+		env["SCRIPT_NAME"] = request.script_name;
 	env["PATH_INFO"] = request.path_info;
 	env["PATH_TRANSLATED"] = request.path_translated;
 	env["QUERY_STRING"] = request.query_string;
@@ -256,7 +259,7 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 	return env;
 }
 
-bool CgiHandler::start(const CGIRequest& request, CgiJob& job) const
+bool CgiHandler::start(CGIRequest& request, CgiJob& job) const
 {
 	int inputPipe[2] = { -1, -1 };
 	int outputPipe[2] = { -1, -1 };

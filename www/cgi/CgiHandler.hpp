@@ -86,7 +86,7 @@ public:
 	void setInterpreter(const std::string& interpreter);
 	void setTimeout(unsigned int timeout_seconds);
 
-	bool start(const CGIRequest& request, CgiJob& job) const;
+	bool start(CGIRequest& request, CgiJob& job) const;
 	void writeInput(CgiJob& job) const;
 	void readOutput(CgiJob& job) const;
 	void pipeError(CgiJob& job, bool inputPipe) const;

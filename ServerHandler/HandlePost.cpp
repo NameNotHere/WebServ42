@@ -1,11 +1,13 @@
 #include "Server.hpp"
 
-const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target)
+const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target, const std::string& method)
 {
     size_t queryPos = target.find('?');
     std::string path = target.substr(0, queryPos);
 
-    const LocationConfig* best = NULL;
+    const LocationConfig* bestPrefix = NULL;
+    const LocationConfig* bestExtension = NULL;
+    size_t bestExtensionLength = 0;
 
     for (size_t i = 0; i < config.locations.size(); ++i)
     {
@@ -21,8 +23,12 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
             if (path.size() >= extension.size()
                 && path.compare(path.size() - extension.size(),
                                 extension.size(), extension) == 0
-                && (best == NULL || best->path == "/"))
-                best = &location;
+                && (bestExtension == NULL
+                    || extension.size() > bestExtensionLength))
+            {
+                bestExtension = &location;
+                bestExtensionLength = extension.size();
+            }
             continue;
         }
 
@@ -35,11 +41,17 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
             path[prefix.size()] != '/')
             continue;
 
-        if (best == NULL || prefix.size() > best->path.size())
-            best = &location;
+        if (bestPrefix == NULL || prefix.size() > bestPrefix->path.size())
+            bestPrefix = &location;
     }
 
-    return best;
+    if (bestExtension != NULL
+        && isMethodAllowed(config, bestExtension, method))
+        return bestExtension;
+    if (bestPrefix != NULL
+        && isMethodAllowed(config, bestPrefix, method))
+        return bestPrefix;
+    return bestExtension != NULL ? bestExtension : bestPrefix;
 }
 
 bool isPostAllowed(const ServerConfig& config, const LocationConfig& location)
@@ -250,17 +262,15 @@ bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, 
 bool handlePost(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config)
 {
     const LocationConfig* location =
-        findMatchingLocation(config, http.getTarget());
+        findMatchingLocation(config, http.getTarget(), "POST");
 
     if (location == NULL)
     {
-        std::cout << "POST failed: no matching location\n";
         return sendPostResponse(clientFd, version, keepAlive, 404);
     }
 
     if (!isMethodAllowed(config, location, "POST"))
     {
-        std::cout << "POST failed: method not allowed\n";
         return sendPostResponse(clientFd, version, keepAlive, 405);
     }
 
@@ -268,7 +278,6 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
 
     if (!getUploadFilename(http.getTarget(), *location, filename))
     {
-        std::cout << "POST failed: could not get upload filename\n";
         return sendPostResponse(clientFd, version, keepAlive, 400);
     }
 

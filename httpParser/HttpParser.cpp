@@ -1,4 +1,5 @@
 #include "HttpParser.hpp"
+#include <utility>
 
 HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request, size_t maxBody)
 {
@@ -8,55 +9,42 @@ HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& reques
 
     if (requestStatus == REQUEST_BAD)
     {
-        std::cout << "Request BAAAAD\n";
         return REQUEST_BAD;
     }
     else if (requestStatus == REQUEST_METHOD_NOT_ALLOWED)
     {
-        std::cout << "Request Method Not allowed\n";
         return REQUEST_METHOD_NOT_ALLOWED;
     }
     else if (requestStatus == REQUEST_METHOD_NOT_IMPLEMENTED)
     {
-        std::cout << "Request Method Not Implemented\n";
         return REQUEST_METHOD_NOT_IMPLEMENTED;
     }
     else if (requestStatus == REQUEST_TARGET_NOT_FOUND)
     {
-        std::cout << "Request Target Not found\n";
         return REQUEST_TARGET_NOT_FOUND;
     }
     else if (requestStatus == REQUEST_VERSION_NOT_SUPPORTED)
     {
-        std::cout << "Http Version not supported\n";
         return REQUEST_VERSION_NOT_SUPPORTED;
     }
 
-    std::cout << "Valid HTTP Request!\n";
-
     if (!headers(request))
     {
-        std::cout << "Invalid Header\n";
         return REQUEST_HEADER_INVALID;
     }
-
-    std::cout << "Valid Header\n";
 
     BodyStatus bodyStatus = body(request, maxBody);
 
     if (bodyStatus == BODY_VALID)
     {
-        std::cout << "Valid Body\n";
         return REQUEST_VALID;
     }
     else if (bodyStatus == BODY_INVALID)
     {
-        std::cout << "Invalid Body\n";
         return REQUEST_BODY_INVALID;
     }
     else if (bodyStatus == BODY_INCOMPLETE)
     {
-        std::cout << "Incomplete Body\n";
         return REQUEST_INCOMPLETE;
     }
     else if (bodyStatus == BODY_TOO_LARGE)
@@ -87,6 +75,11 @@ size_t HttpParser::getRequestLength() const
 const std::string& HttpParser::getBody() const
 {
 	return _body;
+}
+
+std::string HttpParser::takeBody()
+{
+	return std::move(_body);
 }
 
 const std::string& HttpParser::getPortNum() const

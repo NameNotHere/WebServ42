@@ -60,6 +60,7 @@ public:
 	const std::string& getTarget() const;
 	const std::string& getVersion() const;
 	const std::string& getBody() const;
+	std::string takeBody();
 	const std::string& getPortNum() const;
 	size_t getRequestLength() const;
 	// Headers
@@ -83,7 +84,7 @@ public:
 
 	// Body
 	BodyStatus body(const std::string& request, size_t maxBody = 0);
-	BodyStatus transferEncoding(const std::string& bodyValue, size_t& bodyLength, size_t maxBody = 0);
+	BodyStatus transferEncoding(const std::string& request, size_t bodyStart, size_t& bodyLength, size_t maxBody = 0);
 	bool convertBytes(std::string& bytes, size_t& digit);
 };
 

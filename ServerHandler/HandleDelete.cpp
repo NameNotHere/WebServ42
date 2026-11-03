@@ -14,7 +14,7 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         return false;
     }
 
-    const LocationConfig* location = findMatchingLocation(config, target);
+    const LocationConfig* location = findMatchingLocation(config, target, "DELETE");
     if (!isMethodAllowed(config, location, "DELETE"))
     {
         sendErrorResponse(clientFd, version, keepAlive, 405);

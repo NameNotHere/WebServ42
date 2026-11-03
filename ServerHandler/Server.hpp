@@ -34,7 +34,7 @@ struct Server
     ServerConfig conf;
 };
 
-bool buildResponse(const HttpParser& http, int clientFd, bool& closeConnection,
+bool buildResponse(HttpParser& http, int clientFd, bool& closeConnection,
                    const ServerConfig& config, CgiHandler& cgi,
                    std::map<int, CgiJob>& cgiJobs);
 void print_config(const std::vector<ServerConfig>& servers);
@@ -61,7 +61,7 @@ std::string normalizeTarget(const std::string& rawTarget);
 std::string toLower(std::string s);
 std::string resolveRequestedPath(const std::string& root, const std::string& target);
 bool sendFileBody(int clientFd, int fd_in, off_t fileSize);
-const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target);
+const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target, const std::string& method);
 bool isPostAllowed(const ServerConfig& config, const LocationConfig& location);
 bool getUploadFilename(const std::string& target, const LocationConfig& location, std::string& filename);
 int openUploadDirectory(const LocationConfig& location);

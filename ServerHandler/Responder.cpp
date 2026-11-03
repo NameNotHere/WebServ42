@@ -252,7 +252,7 @@ std::string toUpper(std::string value)
     return value;
 }
 
-bool buildResponse(const HttpParser& http, int clientFd,
+bool buildResponse(HttpParser& http, int clientFd,
                    bool& keepAlive, const ServerConfig& config,
                    CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs)
 {
@@ -267,7 +267,7 @@ bool buildResponse(const HttpParser& http, int clientFd,
         keepAlive = (version == "HTTP/1.1");
 
     const LocationConfig* location =
-        findMatchingLocation(config, http.getTarget());
+        findMatchingLocation(config, http.getTarget(), toUpper(http.getMethod()));
     const bool configuredCgi = location != NULL
         && location->path.compare(0, 2, "*.") == 0
         && !location->cgi_path.empty()
@@ -283,22 +283,39 @@ bool buildResponse(const HttpParser& http, int clientFd,
 
         std::string target = http.getTarget();
         size_t queryPosition = target.find('?');
+        std::string scriptUri = target;
+        if (queryPosition != std::string::npos)
+            scriptUri = target.substr(0, queryPosition);
 
         request.method = toUpper(http.getMethod());
-        request.script_name = queryPosition == std::string::npos
-            ? target
-            : target.substr(0, queryPosition);
-
-        const std::string& root = configuredCgi && !location->root.empty()
-            ? location->root : config.root;
-        request.script_path = resolveRequestedPath(root, request.script_name);
         if (configuredCgi)
+        {
+            request.script_name.clear();
+            request.path_info = scriptUri;
             request.interpreter = location->cgi_path;
-        request.query_string = queryPosition == std::string::npos
-            ? ""
-            : target.substr(queryPosition + 1);
+        }
+        else
+            request.script_name = scriptUri;
 
-        request.body = http.getBody();
+        const std::string* root = &config.root;
+        if (configuredCgi && !location->root.empty())
+            root = &location->root;
+        std::string scriptPathUri = scriptUri;
+        if (configuredCgi)
+        {
+            size_t lastSlash = scriptUri.find_last_of('/');
+            if (lastSlash != std::string::npos)
+                scriptPathUri = scriptUri.substr(lastSlash + 1);
+        }
+
+        request.script_path = resolveRequestedPath(*root, scriptPathUri);
+        if (configuredCgi)
+            request.path_translated = resolveRequestedPath(*root, scriptUri);
+
+        if (queryPosition != std::string::npos)
+            request.query_string = target.substr(queryPosition + 1);
+
+        request.body = http.takeBody();
         request.headers = http.getHeaders();
 
         request.server_protocol = version;
@@ -312,7 +329,7 @@ bool buildResponse(const HttpParser& http, int clientFd,
         job.clientFd = clientFd;
         job.httpVersion = version;
         job.keepAlive = keepAlive;
-        cgiJobs[clientFd] = job;
+        cgiJobs.emplace(clientFd, std::move(job));
         return true;
     }
 

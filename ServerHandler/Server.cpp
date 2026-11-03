@@ -311,7 +311,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                     removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
                 continue;
             }
-            char buffer[4096];
+            char buffer[65536];
             ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
             if (bytesRead == 0)
             {
@@ -363,7 +363,6 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
     {
         if (reqs[fd].find("\r\n\r\n") == std::string::npos)
         {
-            std::cout << "Request:" << reqs[fd] << "\n";
             const std::string& request = reqs[fd];
 
             for (std::string::size_type i = 0; i < request.size(); ++i)
@@ -379,7 +378,6 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
                     return;
                 }
             }
-            std::cout << "REQUEST INCOMPLETE\n";
             return;
         }
 
@@ -393,11 +391,12 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         if (firstSpace != std::string::npos
             && secondSpace != std::string::npos)
         {
+            std::string method = rawRequest.substr(0, firstSpace);
             std::string target = rawRequest.substr(
                 firstSpace + 1, secondSpace - firstSpace - 1);
 
             const LocationConfig* location =
-                findMatchingLocation(clientConfigs.at(fd), target);
+                findMatchingLocation(clientConfigs.at(fd), target, method);
 
             if (location != NULL && location->hasMaxBody)
                 maxBody = location->maxBody;
@@ -411,7 +410,11 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
             buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
             reqs[fd].erase(0, requestLen);
             if (cgiJobs.find(fd) != cgiJobs.end())
+            {
+                if (reqs[fd].empty())
+                    std::string().swap(reqs[fd]);
                 return;
+            }
             if (!keepAlive)
             {
                 closeAfterPendingOutput(fd);

@@ -1,7 +1,6 @@
 #include "HttpParser.hpp"
-
-// Might have to check for empty body which is still valid
-// Will there ever be content length or Transfer-encoding and no body?
+#include <vector>
+#include <utility>
 
 HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBody)
 {
@@ -26,17 +25,17 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBo
 
 	if(hasTransferEncoding)
 	{
-		const std::string body = request.substr(bodyStart);
 		size_t bodyLength = 0;
-		BodyStatus status = transferEncoding(body, bodyLength, maxBody);
+		BodyStatus status = transferEncoding(request, bodyStart, bodyLength, maxBody);
 
 		if(status == BODY_INVALID)
 			return BODY_INVALID;
 		if(status == BODY_INCOMPLETE)
 			return BODY_INCOMPLETE;
+		if(status == BODY_TOO_LARGE)
+			return BODY_TOO_LARGE;
 
 		_requestLength = start + 4 + bodyLength;
-		std::cout << "Transfer-Encoding body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
 	else if(hasContentLength)
@@ -54,63 +53,61 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBo
 		}
 		_requestLength = bodyStart + contentLength;
 		_body = request.substr(bodyStart, contentLength);
-		std::cout << "Body:" << getBody() << "\n";
 		return BODY_VALID;
 	}
 	_requestLength = start + 4;
 	return BODY_VALID;
 }
 
-HttpParser::BodyStatus HttpParser::transferEncoding(const std::string& body, size_t& bodyLength, size_t maxBody)
+HttpParser::BodyStatus HttpParser::transferEncoding(
+    const std::string& request, size_t bodyStart, size_t& bodyLength, size_t maxBody)
 {
-    size_t pos = 0;
+    size_t pos = bodyStart;
+    size_t decodedSize = 0;
+    std::vector<std::pair<size_t, size_t> > chunks;
 
     while (true)
     {
-        size_t bytesPos = body.find("\r\n", pos);
-
+        size_t bytesPos = request.find("\r\n", pos);
         if (bytesPos == std::string::npos)
             return BODY_INCOMPLETE;
 
-        std::string bytes = body.substr(pos, bytesPos - pos);
-
+        std::string bytes = request.substr(pos, bytesPos - pos);
         if (bytes.empty())
             return BODY_INVALID;
 
         size_t digit = 0;
-
-		if(!convertBytes(bytes, digit))
-			return BODY_INVALID;
+        if (!convertBytes(bytes, digit))
+            return BODY_INVALID;
 
         pos = bytesPos + 2;
-
         if (digit == 0)
         {
-            if (body.size() < pos + 2)
+            if (request.size() - pos < 2)
                 return BODY_INCOMPLETE;
-
-            if (body.substr(pos, 2) != "\r\n")
+            if (request.compare(pos, 2, "\r\n") != 0)
                 return BODY_INVALID;
 
-            pos += 2;
-            bodyLength = pos;
+            _body.clear();
+            _body.reserve(decodedSize);
+            for (size_t i = 0; i < chunks.size(); ++i)
+                _body.append(request, chunks[i].first, chunks[i].second);
+
+            bodyLength = pos + 2 - bodyStart;
             return BODY_VALID;
         }
 
-        if (maxBody != 0
-            && (_body.size() > maxBody || digit > maxBody - _body.size()))
+        if (maxBody != 0 && (decodedSize > maxBody || digit > maxBody - decodedSize))
             return BODY_TOO_LARGE;
-
-        if (body.size() < pos + digit + 2)
+        if (request.size() - pos < digit
+            || request.size() - pos - digit < 2)
             return BODY_INCOMPLETE;
 
-		_body += body.substr(pos, digit);
-
+        chunks.push_back(std::make_pair(pos, digit));
+        decodedSize += digit;
         pos += digit;
-
-        if (body.substr(pos, 2) != "\r\n")
+        if (request.compare(pos, 2, "\r\n") != 0)
             return BODY_INVALID;
-
         pos += 2;
     }
 }

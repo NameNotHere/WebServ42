@@ -1,5 +1,63 @@
 #include "Server.hpp"
 
+std::string GetEnding(const std::string& path);
+
+namespace
+{
+    const off_t SMALL_FILE_LIMIT = 64 * 1024;
+
+    struct CachedStaticFile
+    {
+        off_t size;
+        time_t modified;
+        std::string body;
+        std::string headerPrefix;
+    };
+
+    std::map<std::string, CachedStaticFile> smallFileCache;
+
+    bool readSmallFile(const std::string& path, const struct stat& info,
+                       const std::string& version, std::string& header,
+                       std::string& body)
+    {
+        std::map<std::string, CachedStaticFile>::iterator cached =
+            smallFileCache.find(path);
+        if (cached == smallFileCache.end() || cached->second.size != info.st_size
+            || cached->second.modified != info.st_mtime)
+        {
+            int fd = open(path.c_str(), O_RDONLY);
+            if (fd == -1)
+                return false;
+
+            CachedStaticFile entry;
+            entry.size = info.st_size;
+            entry.modified = info.st_mtime;
+            entry.body.resize(static_cast<size_t>(info.st_size));
+            size_t offset = 0;
+            while (offset < entry.body.size())
+            {
+                ssize_t count = read(fd, &entry.body[offset], entry.body.size() - offset);
+                if (count <= 0)
+                {
+                    close(fd);
+                    return false;
+                }
+                offset += static_cast<size_t>(count);
+            }
+            close(fd);
+
+            std::ostringstream prefix;
+            prefix << " 200 OK\r\nContent-Length: " << info.st_size
+                   << "\r\nContent-Type: " << GetEnding(path) << "\r\n";
+            entry.headerPrefix = prefix.str();
+            cached = smallFileCache.insert_or_assign(path, std::move(entry)).first;
+        }
+        header = version + cached->second.headerPrefix;
+        body = cached->second.body;
+        return true;
+    }
+}
+
 std::string GetEnding(const std::string& path)
 {
     size_t dot = path.rfind('.');
@@ -25,7 +83,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         return sendErrorResponse(clientFd, version, keepAlive, 400);
 
     const LocationConfig* location =
-        findMatchingLocation(config, decodedTarget);
+        findMatchingLocation(config, decodedTarget, "GET");
     bool redirectToSlash = false;
 
     if (!decodedTarget.empty()
@@ -33,7 +91,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     {
         const std::string slashTarget = decodedTarget + "/";
         const LocationConfig* slashLocation =
-            findMatchingLocation(config, slashTarget);
+            findMatchingLocation(config, slashTarget, "GET");
         if (slashLocation != NULL
             && slashLocation->path == slashTarget
             && (location == NULL
@@ -110,6 +168,22 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     {
         sendErrorResponse(clientFd, version, keepAlive, 404);
         return false;
+    }
+
+    if (st.st_size <= SMALL_FILE_LIMIT)
+    {
+        std::string header;
+        std::string body;
+        if (!readSmallFile(path, st, version, header, body))
+        {
+            sendErrorResponse(clientFd, version, keepAlive, 500);
+            return false;
+        }
+        header += keepAlive ? "Connection: keep-alive\r\n\r\n"
+                            : "Connection: close\r\n\r\n";
+        sendAll(clientFd, header.data(), header.size());
+        sendAll(clientFd, body.data(), body.size());
+        return true;
     }
 
     const int fd_in = open(path.c_str(), O_RDONLY);
