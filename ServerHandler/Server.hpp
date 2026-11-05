@@ -47,7 +47,7 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
                    std::map<int, CgiJob>& cgiJobs);
 std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {});
 bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code);
-bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result);
+bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result);
 bool hasPendingOutput(int clientFd);
 bool flushPendingOutput(int clientFd);
 void clearPendingOutput(int clientFd);

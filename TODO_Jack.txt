@@ -18,3 +18,4 @@
 - runEventLoop is 200+ lines 
 - runHttpParser is 90+ lines
 - Sort out error codes in server.cpp
+- be able to recreate temp.conf for eval 

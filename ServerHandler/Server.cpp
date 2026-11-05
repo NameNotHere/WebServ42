@@ -20,11 +20,38 @@ namespace
     };
 
     const size_t LARGE_POST_THRESHOLD = 8 * 1024 * 1024;
-    // Two 100 MB CGI bodies can be in flight at once; additional clients wait
-    // for a slot instead of serializing the entire large-upload test.
-    const size_t MAX_BUFFERED_LARGE_POSTS = 2;
+    // Large CGI requests and responses are buffered in memory. Limit the
+    // number active at once to cap memory use while allowing concurrent work.
+    const size_t MAX_BUFFERED_LARGE_POSTS = 3;
     std::set<int> largePostClients;
     std::set<int> peerClosedClients;
+    const size_t MAX_CGI_PIPE_BYTES_PER_EVENT = 1024 * 1024;
+
+    void drainCgiInput(CgiHandler& cgi, CgiJob& job)
+    {
+        size_t initialOffset = job.bodyOffset;
+        while (job.stdinFd != -1
+               && job.bodyOffset - initialOffset < MAX_CGI_PIPE_BYTES_PER_EVENT)
+        {
+            size_t previousOffset = job.bodyOffset;
+            cgi.writeInput(job);
+            if (job.bodyOffset == previousOffset)
+                break;
+        }
+    }
+
+    void drainCgiOutput(CgiHandler& cgi, CgiJob& job)
+    {
+        size_t initialSize = job.output.size();
+        while (job.stdoutFd != -1
+               && job.output.size() - initialSize < MAX_CGI_PIPE_BYTES_PER_EVENT)
+        {
+            size_t previousSize = job.output.size();
+            cgi.readOutput(job);
+            if (job.output.size() == previousSize)
+                break;
+        }
+    }
 
     bool isLargePost(const HttpParser& http)
     {
@@ -307,12 +334,12 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                     if (events & (POLLERR | POLLHUP))
                         cgi.pipeError(job->second, true);
                     else if (events & POLLOUT)
-                        cgi.writeInput(job->second);
+                        drainCgiInput(cgi, job->second);
                 }
                 else
                 {
                     if (events & (POLLIN | POLLHUP))
-                        cgi.readOutput(job->second);
+                        drainCgiOutput(cgi, job->second);
                     if ((events & POLLERR) && job->second.stdoutFd != -1)
                         cgi.pipeError(job->second, false);
                 }
@@ -418,6 +445,8 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             std::map<int, CgiJob>::iterator job = cgiJobs.find(clientFd);
             if (job == cgiJobs.end())
                 continue;
+            job->second.requestBody.clear();
+            std::string().swap(job->second.requestBody);
             CGIResult result = cgi.result(job->second);
             queueCgiResponse(clientFd, job->second, result);
             bool keepAlive = job->second.keepAlive;

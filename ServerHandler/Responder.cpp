@@ -14,6 +14,9 @@ namespace
         OutputSegment(const std::string& data)
             : bytes(data), offset(0), fileFd(-1), fileRemaining(0), isFile(false) {}
 
+        OutputSegment(std::string&& data)
+            : bytes(std::move(data)), offset(0), fileFd(-1), fileRemaining(0), isFile(false) {}
+
         OutputSegment(int fd, off_t size)
             : offset(0), fileFd(fd), fileRemaining(size), isFile(true) {}
     };
@@ -232,7 +235,7 @@ bool sendFileBody(int clientFd, int fd_in, off_t fileSize)
     return true;
 }
 
-bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result)
+bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result)
 {
     if (result.timed_out || result.io_error || result.exit_status != 0)
         return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
@@ -240,6 +243,7 @@ bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result)
     CgiResponse parsed;
     if (!parsed.parse(result.raw_output))
         return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
+    std::string().swap(result.raw_output);
 
     std::ostringstream response;
     response << job.httpVersion << " " << parsed.status_code << " "
@@ -255,9 +259,12 @@ bool queueCgiResponse(int clientFd, const CgiJob& job, const CGIResult& result)
     response << (job.keepAlive
         ? "Connection: keep-alive\r\n"
         : "Connection: close\r\n");
-    response << "\r\n" << parsed.body;
-    std::string output = response.str();
-    return sendAll(clientFd, output.data(), output.size()) != -1;
+    response << "\r\n";
+
+    ClientOutput& output = clientOutputs[clientFd];
+    output.segments.push_back(OutputSegment(response.str()));
+    output.segments.push_back(OutputSegment(std::move(parsed.body)));
+    return true;
 }
 
 // bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const std::string& root)
