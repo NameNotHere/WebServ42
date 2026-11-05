@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cerrno>
 #include <set>
 
 namespace
@@ -19,8 +20,11 @@ namespace
     };
 
     const size_t LARGE_POST_THRESHOLD = 8 * 1024 * 1024;
-    const size_t MAX_BUFFERED_LARGE_POSTS = 3;
+    // Two 100 MB CGI bodies can be in flight at once; additional clients wait
+    // for a slot instead of serializing the entire large-upload test.
+    const size_t MAX_BUFFERED_LARGE_POSTS = 2;
     std::set<int> largePostClients;
+    std::set<int> peerClosedClients;
 
     bool isLargePost(const HttpParser& http)
     {
@@ -42,6 +46,18 @@ namespace
         return flags != -1 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1;
     }
 
+    void enlargeCgiInputPipe(int fd)
+    {
+#ifdef F_SETPIPE_SZ
+        const int sizes[] = { 1024 * 1024, 512 * 1024, 256 * 1024,
+                              128 * 1024, 64 * 1024 };
+        for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i)
+            if (fcntl(fd, F_SETPIPE_SZ, sizes[i]) != -1)
+                return;
+#endif
+        (void)fd;
+    }
+
     void removeClient(int fd, std::vector<pollfd>& fds,
                       std::map<int, std::string>& requests,
                       std::map<int, ServerConfig>& configs,
@@ -58,6 +74,7 @@ namespace
         requests.erase(fd);
         configs.erase(fd);
         largePostClients.erase(fd);
+        peerClosedClients.erase(fd);
         for (size_t i = 0; i < fds.size(); ++i)
         {
             if (fds[i].fd == fd)
@@ -336,18 +353,55 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             if (!largePostClients.count(fd)
                 && largePostClients.size() >= MAX_BUFFERED_LARGE_POSTS)
                 continue;
-            char buffer[65536];
-            ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
-            if (bytesRead == 0)
+            // Drain available socket data in bounded batches. This reduces
+            // poll/parser work for large uploads without letting one client
+            // monopolize the event loop.
+            char buffer[262144];
+            size_t bytesReceived = 0;
+            const size_t maxBytesPerEvent = 1024 * 1024;
+            bool disconnected = false;
+            bool peerClosed = false;
+            while (bytesReceived < maxBytesPerEvent)
             {
-                std::cout << "Client disconnected\n";
-                removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                size_t capacity = sizeof(buffer);
+                if (capacity > maxBytesPerEvent - bytesReceived)
+                    capacity = maxBytesPerEvent - bytesReceived;
+                ssize_t bytesRead = recv(fd, buffer, capacity, 0);
+                if (bytesRead == 0)
+                {
+                    peerClosed = true;
+                    break;
+                }
+                if (bytesRead < 0)
+                {
+                    if (errno == EINTR)
+                        continue;
+                    if (errno != EAGAIN && errno != EWOULDBLOCK)
+                    {
+                        removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                        disconnected = true;
+                    }
+                    break;
+                }
+                reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
+                bytesReceived += static_cast<size_t>(bytesRead);
+            }
+            if (disconnected)
+                continue;
+            if (bytesReceived != 0)
+                runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
+            if (peerClosed)
+            {
+                peerClosedClients.insert(fd);
+                if (cgiJobs.find(fd) == cgiJobs.end())
+                {
+                    if (hasPendingOutput(fd))
+                        closeAfterPendingOutput(fd);
+                    else
+                        removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                }
                 continue;
             }
-            if (bytesRead < 0)
-                continue;
-            reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
-            runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
         }
 
         std::vector<int> completedClients;
@@ -375,6 +429,14 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             else if (reqs.find(clientFd) != reqs.end()
                      && !reqs[clientFd].empty())
                 runHttpParser(clientFd, reqs, clientConfigs, cgi, cgiJobs);
+            if (peerClosedClients.count(clientFd)
+                && cgiJobs.find(clientFd) == cgiJobs.end())
+            {
+                if (hasPendingOutput(clientFd))
+                    closeAfterPendingOutput(clientFd);
+                else
+                    removeClient(clientFd, fds, reqs, clientConfigs, cgi, cgiJobs);
+            }
         }
     }
 }
@@ -434,6 +496,9 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         {
             size_t requestLen = http.getRequestLength();
             buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
+            std::map<int, CgiJob>::iterator cgiJob = cgiJobs.find(fd);
+            if (cgiJob != cgiJobs.end() && cgiJob->second.stdinFd != -1)
+                enlargeCgiInputPipe(cgiJob->second.stdinFd);
             reqs[fd].erase(0, requestLen);
             if (cgiJobs.find(fd) == cgiJobs.end())
                 largePostClients.erase(fd);
