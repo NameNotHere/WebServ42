@@ -111,6 +111,7 @@ namespace
             }
         }
     }
+
 }
 
 void Init(Server& server)
@@ -210,14 +211,13 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
     std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
-                  std::map<int, std::string>& reqs)
+namespace
 {
-    std::map<int, ServerConfig> clientConfigs;
-    std::map<int, CgiJob> cgiJobs;
-    CgiHandler cgi("/usr/bin/python3", 5);
-
-    while (true)
+    void updateClientPollEvents(
+        const std::vector<Server>& hosting, std::vector<pollfd>& fds,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
     {
         size_t i = 0;
         while (i < fds.size())
@@ -246,9 +246,12 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             else
                 ++i;
         }
+    }
 
-        std::vector<pollfd> pollFds;
-        std::vector<PollSource> sources;
+    void appendClientPollSources(
+        const std::vector<Server>& hosting, const std::vector<pollfd>& fds,
+        std::vector<pollfd>& pollFds, std::vector<PollSource>& sources)
+    {
         for (size_t j = 0; j < fds.size(); ++j)
         {
             pollFds.push_back(fds[j]);
@@ -267,6 +270,12 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             }
             sources.push_back(source);
         }
+    }
+
+    void appendCgiPollSources(
+        const std::map<int, CgiJob>& cgiJobs,
+        std::vector<pollfd>& pollFds, std::vector<PollSource>& sources)
+    {
         for (std::map<int, CgiJob>::const_iterator it = cgiJobs.begin();
              it != cgiJobs.end(); ++it)
         {
@@ -291,146 +300,169 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                 sources.push_back(source);
             }
         }
+    }
 
-        int ready = poll(pollFds.data(), pollFds.size(),
-                         cgiJobs.empty() ? -1 : 100);
-        if (ready == -1)
+    void handleListenerEvent(
+        const PollSource& source, short events,
+        std::vector<Server>& hosting, std::vector<pollfd>& fds,
+        std::map<int, ServerConfig>& clientConfigs)
+    {
+        if (!(events & POLLIN))
+            return;
+        for (size_t k = 0; k < hosting.size(); ++k)
+            if (source.fd == hosting[k].serverFD)
+            {
+                handleNewConnection(source.fd, hosting[k].conf,
+                                    fds, clientConfigs);
+                break;
+            }
+    }
+
+    void handleCgiPipeEvent(
+        const PollSource& source, short events, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        std::map<int, CgiJob>::iterator job =
+            cgiJobs.find(source.clientFd);
+        if (job == cgiJobs.end())
+            return;
+        bool inputPipe = source.kind == POLL_CGI_INPUT;
+        if (events & POLLNVAL)
+            cgi.pipeError(job->second, inputPipe);
+        else if (inputPipe)
         {
-            std::cerr << "poll() failed\n";
-            break;
+            if (events & (POLLERR | POLLHUP))
+                cgi.pipeError(job->second, true);
+            else if (events & POLLOUT)
+                drainCgiInput(cgi, job->second);
         }
-
-        for (size_t j = 0; j < pollFds.size(); ++j)
+        else
         {
-            short events = pollFds[j].revents;
-            if (events == 0)
-                continue;
-            const PollSource& source = sources[j];
+            if (events & (POLLIN | POLLHUP))
+                drainCgiOutput(cgi, job->second);
+            if ((events & POLLERR) && job->second.stdoutFd != -1)
+                cgi.pipeError(job->second, false);
+        }
+    }
 
-            if (source.kind == POLL_LISTENER)
-            {
-                if (events & POLLIN)
-                    for (size_t k = 0; k < hosting.size(); ++k)
-                        if (source.fd == hosting[k].serverFD)
-                        {
-                            handleNewConnection(source.fd, hosting[k].conf,
-                                                fds, clientConfigs);
-                            break;
-                        }
-                continue;
-            }
-            if (source.kind == POLL_CGI_INPUT
-                || source.kind == POLL_CGI_OUTPUT)
-            {
-                std::map<int, CgiJob>::iterator job =
-                    cgiJobs.find(source.clientFd);
-                if (job == cgiJobs.end())
-                    continue;
-                bool inputPipe = source.kind == POLL_CGI_INPUT;
-                if (events & POLLNVAL)
-                    cgi.pipeError(job->second, inputPipe);
-                else if (inputPipe)
-                {
-                    if (events & (POLLERR | POLLHUP))
-                        cgi.pipeError(job->second, true);
-                    else if (events & POLLOUT)
-                        drainCgiInput(cgi, job->second);
-                }
-                else
-                {
-                    if (events & (POLLIN | POLLHUP))
-                        drainCgiOutput(cgi, job->second);
-                    if ((events & POLLERR) && job->second.stdoutFd != -1)
-                        cgi.pipeError(job->second, false);
-                }
-                continue;
-            }
+    bool clientIsConnected(int fd, const std::vector<pollfd>& fds)
+    {
+        for (size_t i = 0; i < fds.size(); ++i)
+            if (fds[i].fd == fd)
+                return true;
+        return false;
+    }
 
-            int fd = source.clientFd;
-            bool connected = false;
-            for (size_t k = 0; k < fds.size(); ++k)
-                if (fds[k].fd == fd)
-                    connected = true;
-            if (!connected)
-                continue;
-            if (events & (POLLNVAL | POLLERR))
+    void handleClientEvent(
+        int fd, short events, std::vector<pollfd>& fds,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        if (!clientIsConnected(fd, fds))
+            return;
+        if (events & (POLLNVAL | POLLERR))
+        {
+            removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+            return;
+        }
+        if (events & POLLOUT)
+        {
+            if (!flushPendingOutput(fd))
             {
                 removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                continue;
+                return;
             }
-            if (events & POLLOUT)
+            if (!hasPendingOutput(fd) && shouldCloseAfterOutput(fd))
             {
-                if (!flushPendingOutput(fd))
-                {
-                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                    continue;
-                }
-                if (!hasPendingOutput(fd) && shouldCloseAfterOutput(fd))
-                {
-                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                    continue;
-                }
-            }
-            if (!(events & POLLIN))
-            {
-                if (events & POLLHUP)
-                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                continue;
-            }
-            if (!largePostClients.count(fd)
-                && largePostClients.size() >= MAX_BUFFERED_LARGE_POSTS)
-                continue;
-            // Drain available socket data in bounded batches. This reduces
-            // poll/parser work for large uploads without letting one client
-            // monopolize the event loop.
-            char buffer[262144];
-            size_t bytesReceived = 0;
-            const size_t maxBytesPerEvent = 1024 * 1024;
-            bool disconnected = false;
-            bool peerClosed = false;
-            while (bytesReceived < maxBytesPerEvent)
-            {
-                size_t capacity = sizeof(buffer);
-                if (capacity > maxBytesPerEvent - bytesReceived)
-                    capacity = maxBytesPerEvent - bytesReceived;
-                ssize_t bytesRead = recv(fd, buffer, capacity, 0);
-                if (bytesRead == 0)
-                {
-                    peerClosed = true;
-                    break;
-                }
-                if (bytesRead < 0)
-                {
-                    if (errno == EINTR)
-                        continue;
-                    if (errno != EAGAIN && errno != EWOULDBLOCK)
-                    {
-                        removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                        disconnected = true;
-                    }
-                    break;
-                }
-                reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
-                bytesReceived += static_cast<size_t>(bytesRead);
-            }
-            if (disconnected)
-                continue;
-            if (bytesReceived != 0)
-                runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
-            if (peerClosed)
-            {
-                peerClosedClients.insert(fd);
-                if (cgiJobs.find(fd) == cgiJobs.end())
-                {
-                    if (hasPendingOutput(fd))
-                        closeAfterPendingOutput(fd);
-                    else
-                        removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                }
-                continue;
+                removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                return;
             }
         }
+        if (!(events & POLLIN))
+        {
+            if (events & POLLHUP)
+                removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+            return;
+        }
+        if (!largePostClients.count(fd)
+            && largePostClients.size() >= MAX_BUFFERED_LARGE_POSTS)
+            return;
 
+        char buffer[262144];
+        size_t bytesReceived = 0;
+        const size_t maxBytesPerEvent = 1024 * 1024;
+        bool disconnected = false;
+        bool peerClosed = false;
+        while (bytesReceived < maxBytesPerEvent)
+        {
+            size_t capacity = sizeof(buffer);
+            if (capacity > maxBytesPerEvent - bytesReceived)
+                capacity = maxBytesPerEvent - bytesReceived;
+            ssize_t bytesRead = recv(fd, buffer, capacity, 0);
+            if (bytesRead == 0)
+            {
+                peerClosed = true;
+                break;
+            }
+            if (bytesRead < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                if (errno != EAGAIN && errno != EWOULDBLOCK)
+                {
+                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                    disconnected = true;
+                }
+                break;
+            }
+            reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
+            bytesReceived += static_cast<size_t>(bytesRead);
+        }
+        if (disconnected)
+            return;
+        if (bytesReceived != 0)
+            runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
+        if (peerClosed)
+        {
+            peerClosedClients.insert(fd);
+            if (cgiJobs.find(fd) == cgiJobs.end())
+            {
+                if (hasPendingOutput(fd))
+                    closeAfterPendingOutput(fd);
+                else
+                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
+            }
+        }
+    }
+
+    void handlePollEvent(
+        const PollSource& source, short events,
+        std::vector<Server>& hosting, std::vector<pollfd>& fds,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        if (source.kind == POLL_LISTENER)
+        {
+            handleListenerEvent(source, events, hosting, fds, clientConfigs);
+            return;
+        }
+        if (source.kind == POLL_CGI_INPUT || source.kind == POLL_CGI_OUTPUT)
+        {
+            handleCgiPipeEvent(source, events, cgi, cgiJobs);
+            return;
+        }
+        handleClientEvent(source.clientFd, events, fds, reqs, clientConfigs,
+                          cgi, cgiJobs);
+    }
+
+    void completeCgiJobs(
+        CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs,
+        std::vector<pollfd>& fds)
+    {
         std::vector<int> completedClients;
         for (std::map<int, CgiJob>::iterator it = cgiJobs.begin();
              it != cgiJobs.end(); ++it)
@@ -464,42 +496,75 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                 if (hasPendingOutput(clientFd))
                     closeAfterPendingOutput(clientFd);
                 else
-                    removeClient(clientFd, fds, reqs, clientConfigs, cgi, cgiJobs);
+                    removeClient(clientFd, fds, reqs, clientConfigs,
+                                 cgi, cgiJobs);
             }
         }
     }
 }
 
-void runHttpParser(int fd, std::map<int, std::string>& reqs,
-                   std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
-                   std::map<int, CgiJob>& cgiJobs)
+void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
+                  std::map<int, std::string>& reqs)
 {
-    bool keepAlive = true;
-    HttpParser http;
+    std::map<int, ServerConfig> clientConfigs;
+    std::map<int, CgiJob> cgiJobs;
+    CgiHandler cgi("/usr/bin/python3", 5);
+
     while (true)
     {
-        if (reqs[fd].find("\r\n\r\n") == std::string::npos)
-        {
-            const std::string& request = reqs[fd];
+        updateClientPollEvents(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
 
-            for (std::string::size_type i = 0; i < request.size(); ++i)
-            {
-                if (request[i] == '\n'
-                    && (i == 0 || request[i - 1] != '\r'))
-                {
-                    std::string response = Response::create(400, "");
-                    sendAll(fd, response.data(), response.size());
-                    closeAfterPendingOutput(fd);
-                    reqs.erase(fd);
-                    clientConfigs.erase(fd);
-                    return;
-                }
-            }
-            return;
+        std::vector<pollfd> pollFds;
+        std::vector<PollSource> sources;
+        appendClientPollSources(hosting, fds, pollFds, sources);
+        appendCgiPollSources(cgiJobs, pollFds, sources);
+
+        int ready = poll(pollFds.data(), pollFds.size(),
+                         cgiJobs.empty() ? -1 : 100);
+        if (ready == -1)
+        {
+            std::cerr << "poll() failed\n";
+            break;
         }
 
+        for (size_t j = 0; j < pollFds.size(); ++j)
+        {
+            short events = pollFds[j].revents;
+            if (events == 0)
+                continue;
+            handlePollEvent(sources[j], events, hosting, fds, reqs,
+                            clientConfigs, cgi, cgiJobs);
+        }
+
+        completeCgiJobs(cgi, cgiJobs, reqs, clientConfigs, fds);
+    }
+}
+
+namespace
+{
+    void rejectBareLfRequest(int fd, std::map<int, std::string>& reqs,
+                             std::map<int, ServerConfig>& clientConfigs)
+    {
+        const std::string& request = reqs[fd];
+        for (std::string::size_type i = 0; i < request.size(); ++i)
+        {
+            if (request[i] == '\n'
+                && (i == 0 || request[i - 1] != '\r'))
+            {
+                std::string response = Response::create(400, "");
+                sendAll(fd, response.data(), response.size());
+                closeAfterPendingOutput(fd);
+                reqs.erase(fd);
+                clientConfigs.erase(fd);
+                return;
+            }
+        }
+    }
+
+    size_t requestMaxBody(int fd, const std::string& rawRequest,
+                          std::map<int, ServerConfig>& clientConfigs)
+    {
         size_t maxBody = 0;
-        const std::string& rawRequest = reqs[fd];
         size_t firstSpace = rawRequest.find(' ');
         size_t secondSpace = firstSpace == std::string::npos
             ? std::string::npos
@@ -518,34 +583,82 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
             if (location != NULL && location->hasMaxBody)
                 maxBody = location->maxBody;
         }
+        return maxBody;
+    }
 
+    bool processValidRequest(
+        int fd, HttpParser& http, bool& keepAlive,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        size_t requestLen = http.getRequestLength();
+        buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
+        std::map<int, CgiJob>::iterator cgiJob = cgiJobs.find(fd);
+        if (cgiJob != cgiJobs.end() && cgiJob->second.stdinFd != -1)
+            enlargeCgiInputPipe(cgiJob->second.stdinFd);
+        reqs[fd].erase(0, requestLen);
+        if (cgiJobs.find(fd) == cgiJobs.end())
+            largePostClients.erase(fd);
+        if (cgiJobs.find(fd) != cgiJobs.end())
+        {
+            if (reqs[fd].empty())
+                std::string().swap(reqs[fd]);
+            return false;
+        }
+        if (!keepAlive)
+        {
+            closeAfterPendingOutput(fd);
+            reqs.erase(fd);
+            clientConfigs.erase(fd);
+            return false;
+        }
+        return !reqs[fd].empty();
+    }
+
+    void sendParserErrorResponse(
+        int fd, HttpParser::RequestStatus status,
+        std::map<int, std::string>& reqs,
+        std::map<int, ServerConfig>& clientConfigs)
+    {
+        int code = 400;
+        if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED) code = 405;
+        else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
+        // else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
+        else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND) code = 404;
+        else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED) code = 505;
+        else if (status == HttpParser::REQUEST_CONTENT_TOO_LARGE) code = 413;
+        std::string response = Response::create(code, "");
+        sendAll(fd, response.data(), response.size());
+        closeAfterPendingOutput(fd);
+        reqs.erase(fd);
+        clientConfigs.erase(fd);
+    }
+}
+
+void runHttpParser(int fd, std::map<int, std::string>& reqs,
+                   std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
+                   std::map<int, CgiJob>& cgiJobs)
+{
+    bool keepAlive = true;
+    HttpParser http;
+    while (true)
+    {
+        if (reqs[fd].find("\r\n\r\n") == std::string::npos)
+        {
+            rejectBareLfRequest(fd, reqs, clientConfigs);
+            return;
+        }
+
+        size_t maxBody = requestMaxBody(fd, reqs[fd], clientConfigs);
         HttpParser::RequestStatus status =
             http.parseHttpRequest(reqs[fd], maxBody);
         if (status == HttpParser::REQUEST_VALID)
         {
-            size_t requestLen = http.getRequestLength();
-            buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
-            std::map<int, CgiJob>::iterator cgiJob = cgiJobs.find(fd);
-            if (cgiJob != cgiJobs.end() && cgiJob->second.stdinFd != -1)
-                enlargeCgiInputPipe(cgiJob->second.stdinFd);
-            reqs[fd].erase(0, requestLen);
-            if (cgiJobs.find(fd) == cgiJobs.end())
-                largePostClients.erase(fd);
-            if (cgiJobs.find(fd) != cgiJobs.end())
-            {
-                if (reqs[fd].empty())
-                    std::string().swap(reqs[fd]);
+            if (!processValidRequest(fd, http, keepAlive, reqs,
+                                     clientConfigs, cgi, cgiJobs))
                 return;
-            }
-            if (!keepAlive)
-            {
-                closeAfterPendingOutput(fd);
-                reqs.erase(fd);
-                clientConfigs.erase(fd);
-                return;
-            }
-            if (reqs[fd].empty())
-                return;
+            continue;
         }
         else if (status == HttpParser::REQUEST_INCOMPLETE)
         {
@@ -555,18 +668,7 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         }
         else
         {
-            int code = 400;
-            if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED) code = 405;
-            else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
-            // else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
-            else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND) code = 404;
-            else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED) code = 505;
-            else if (status == HttpParser::REQUEST_CONTENT_TOO_LARGE) code = 413;
-            std::string response = Response::create(code, "");
-            sendAll(fd, response.data(), response.size());
-            closeAfterPendingOutput(fd);
-            reqs.erase(fd);
-            clientConfigs.erase(fd);
+            sendParserErrorResponse(fd, status, reqs, clientConfigs);
             return;
         }
     }

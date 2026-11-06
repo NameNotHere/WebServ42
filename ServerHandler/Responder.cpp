@@ -267,35 +267,6 @@ bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result)
     return true;
 }
 
-// bool buildResponse(const HttpParser& http, int clientFd, bool& keepAlive, const std::string& root)
-// {
-//     std::string version = http.getVersion();
-
-//     std::string connLower = toLower(findHeaderValue(http.getHeaders(), "Connection"));
-
-//     if (!connLower.empty())
-//         if (connLower.find("close") != std::string::npos)
-//             keepAlive = false;
-//         else if (connLower.find("keep-alive") != std::string::npos)
-//             keepAlive = true;
-//         else
-//             keepAlive = (version == "HTTP/1.1");
-//     else
-//         keepAlive = (version == "HTTP/1.1");
-
-//     if (toLower(http.getMethod()) == "delete")
-//         return handleDelete(clientFd, version, keepAlive, http.getTarget(), root);
-
-//     else if (toLower(http.getMethod()) != "get")
-//     {
-//         std::string resp = makeErrorResponse(405, version, keepAlive, {{"Allow", "GET"}});
-//         if (sendAll(clientFd, resp.data(), resp.size()) == -1)
-//             return false;
-//         return true;
-//     }
-//     return handleGet(http, version, keepAlive, clientFd, root);
-// }
-
 std::string toUpper(std::string value)
 {
     for (size_t i = 0; i < value.size(); ++i)

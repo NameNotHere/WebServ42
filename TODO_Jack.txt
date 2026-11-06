@@ -15,7 +15,8 @@
 
 - Should remove ternaary operators through out the project unless we can explain them
 - Client disconnected not showing in terminal when close browser
-- runEventLoop is 200+ lines 
-- runHttpParser is 90+ lines
 - Sort out error codes in server.cpp
 - be able to recreate temp.conf for eval 
+- HandleGet is 100+ lines
+- buildResponse maybe too big
+- REMOVE AGENTS.md before eval
