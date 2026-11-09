@@ -266,22 +266,27 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
 
     if (location == NULL)
     {
-        return sendPostResponse(clientFd, version, keepAlive, 404);
+        return sendErrorResponse(clientFd, version, keepAlive, 404, &config);
     }
 
     if (!isMethodAllowed(config, location, "POST"))
     {
-        return sendPostResponse(clientFd, version, keepAlive, 405);
+        return sendErrorResponse(
+            clientFd, version, keepAlive, 405, &config,
+            std::vector<std::pair<std::string, std::string> >(1,
+                std::make_pair("Allow", allowHeaderValue(config, location))));
     }
 
     std::string filename;
 
     if (!getUploadFilename(http.getTarget(), *location, filename))
     {
-        return sendPostResponse(clientFd, version, keepAlive, 400);
+        return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
     }
 
     int status = saveUploadedFile(*location, filename, http.getBody());
 
+    if (status >= 400)
+        return sendErrorResponse(clientFd, version, keepAlive, status, &config);
     return sendPostResponse(clientFd, version, keepAlive, status);
 }

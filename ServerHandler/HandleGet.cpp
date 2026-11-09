@@ -80,7 +80,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     std::string decodedTarget;
 
     if (!decodeUriPath(target, decodedTarget))
-        return sendErrorResponse(clientFd, version, keepAlive, 400);
+        return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
 
     const LocationConfig* location =
         findMatchingLocation(config, decodedTarget, "GET");
@@ -104,12 +104,15 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
 
     if (!isMethodAllowed(config, location, "GET"))
     {
-        sendErrorResponse(clientFd, version, keepAlive, 405);
+        sendErrorResponse(
+            clientFd, version, keepAlive, 405, &config,
+            std::vector<std::pair<std::string, std::string> >(1,
+                std::make_pair("Allow", allowHeaderValue(config, location))));
         return false;
     }
     if (decodedTarget.find("..") != std::string::npos)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 400);
+        sendErrorResponse(clientFd, version, keepAlive, 400, &config);
         return false;
     }
     if (redirectToSlash)
@@ -149,7 +152,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     struct stat st;
     if (stat(path.c_str(), &st) == -1)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 404);
+        sendErrorResponse(clientFd, version, keepAlive, 404, &config);
         return false;
     }
     if (S_ISDIR(st.st_mode) && !decodedTarget.empty()
@@ -166,7 +169,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     }
     if (!S_ISREG(st.st_mode))
     {
-        sendErrorResponse(clientFd, version, keepAlive, 404);
+        sendErrorResponse(clientFd, version, keepAlive, 404, &config);
         return false;
     }
 
@@ -176,7 +179,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         std::string body;
         if (!readSmallFile(path, st, version, header, body))
         {
-            sendErrorResponse(clientFd, version, keepAlive, 500);
+            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
             return false;
         }
         header += keepAlive ? "Connection: keep-alive\r\n\r\n"
@@ -189,7 +192,7 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     const int fd_in = open(path.c_str(), O_RDONLY);
     if (fd_in == -1)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 500);
+        sendErrorResponse(clientFd, version, keepAlive, 500, &config);
         return std::cout << "Cant open fd\n", false;
     }
 

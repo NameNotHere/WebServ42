@@ -45,15 +45,17 @@ std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
 void runHttpParser(int fd, std::map<int, std::string>& reqs,
                    std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
                    std::map<int, CgiJob>& cgiJobs);
-std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {});
-bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code);
-bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result);
+std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}, const ServerConfig* config = NULL);
+bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code, const ServerConfig* config = NULL, const std::vector<std::pair<std::string, std::string> >& extraHeaders = std::vector<std::pair<std::string, std::string> >());
+bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result,
+                      const ServerConfig* config = NULL);
 bool hasPendingOutput(int clientFd);
 bool flushPendingOutput(int clientFd);
 void clearPendingOutput(int clientFd);
 void closeAfterPendingOutput(int clientFd);
 bool shouldCloseAfterOutput(int clientFd);
 std::string statusText(int code);
+std::string allowHeaderValue(const ServerConfig& config, const LocationConfig* location);
 bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config);
 ssize_t sendAll(int fd, const char* buf, size_t len);

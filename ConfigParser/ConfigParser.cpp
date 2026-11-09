@@ -19,7 +19,7 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
     {
         expect_and_increase(tokens, pos, WORD);
         int code = std::stoi(tokens[pos - 1].word);
-        if (code < 100 || code > 699)
+        if (code < 100 || code > 599)
             throw std::runtime_error("Invalid error code\n");
         expect_and_increase(tokens, pos, WORD);
         server.errors[code] = tokens[pos - 1].word;

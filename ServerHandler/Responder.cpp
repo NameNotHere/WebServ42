@@ -50,15 +50,38 @@ std::string toLower(std::string s)
 
 std::string statusText(int code)
 {
-    switch (code)
+    return Response::statusMsg(code);
+}
+
+std::string allowHeaderValue(const ServerConfig& config,
+                             const LocationConfig* location)
+{
+    std::vector<std::string> methods;
+    if (location != NULL && !location->allowed_methods.empty())
+        methods = location->allowed_methods;
+    else if (!config.allowed_methods.empty())
     {
-        case 200: return "OK";
-        case 400: return "Bad Request";
-        case 404: return "Not Found";
-        case 405: return "Method Not Allowed";
-        case 500: return "Internal Server Error";
-        default:  return "";
+        for (size_t i = 0; i < config.allowed_methods.size(); ++i)
+        {
+            if (config.allowed_methods[i] == GET)
+                methods.push_back("GET");
+            else if (config.allowed_methods[i] == POST)
+                methods.push_back("POST");
+            else if (config.allowed_methods[i] == DELETE)
+                methods.push_back("DELETE");
+        }
     }
+    else
+        methods.push_back("GET");
+
+    std::string value;
+    for (size_t i = 0; i < methods.size(); ++i)
+    {
+        if (!value.empty())
+            value += ", ";
+        value += methods[i];
+    }
+    return value;
 }
 
 std::string findHeaderValue(const std::map<std::string, std::string>& headers, const std::string& name)
@@ -157,7 +180,7 @@ bool flushPendingOutput(int clientFd)
                 message.msg_iovlen = vectorCount;
                 ssize_t sent = sendmsg(clientFd, &message, 0);
                 if (sent <= 0)
-                    return sent < 0;
+                    return false;
 
                 size_t remaining = static_cast<size_t>(sent);
                 while (remaining > 0 && !output->second.segments.empty())
@@ -181,7 +204,7 @@ bool flushPendingOutput(int clientFd)
             ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                                 segment.bytes.size() - segment.offset, 0);
             if (sent <= 0)
-                return sent < 0;
+                return false;
             segment.offset += static_cast<size_t>(sent);
             if (segment.offset < segment.bytes.size())
                 return true;
@@ -235,14 +258,17 @@ bool sendFileBody(int clientFd, int fd_in, off_t fileSize)
     return true;
 }
 
-bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result)
+bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result,
+                      const ServerConfig* config)
 {
     if (result.timed_out || result.io_error || result.exit_status != 0)
-        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
+        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive,
+                                 500, config);
 
     CgiResponse parsed;
     if (!parsed.parse(result.raw_output))
-        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive, 500);
+        return sendErrorResponse(clientFd, job.httpVersion, job.keepAlive,
+                                 500, config);
     std::string().swap(result.raw_output);
 
     std::ostringstream response;
@@ -300,7 +326,10 @@ bool buildResponse(HttpParser& http, int clientFd,
     {
         if (configuredCgi
             && !isMethodAllowed(config, location, toUpper(http.getMethod())))
-            return sendErrorResponse(clientFd, version, keepAlive, 405);
+            return sendErrorResponse(
+                clientFd, version, keepAlive, 405, &config,
+                std::vector<std::pair<std::string, std::string> >(1,
+                    std::make_pair("Allow", allowHeaderValue(config, location))));
 
         CGIRequest request;
 
@@ -350,7 +379,7 @@ bool buildResponse(HttpParser& http, int clientFd,
         const unsigned int timeoutSeconds = request.body.size() >= 8 * 1024 * 1024
             ? 30 : 5;
         if (!cgi.start(request, job, timeoutSeconds))
-            return sendErrorResponse(clientFd, version, keepAlive, 500);
+            return sendErrorResponse(clientFd, version, keepAlive, 500, &config);
         job.clientFd = clientFd;
         job.httpVersion = version;
         job.keepAlive = keepAlive;
