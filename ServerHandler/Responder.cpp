@@ -206,8 +206,13 @@ bool flushPendingOutput(int clientFd)
             if (sent <= 0)
                 return false;
             segment.offset += static_cast<size_t>(sent);
-            if (segment.offset < segment.bytes.size())
-                return true;
+            if (segment.offset == segment.bytes.size()
+                && segment.fileRemaining == 0)
+            {
+                close(segment.fileFd);
+                output->second.segments.pop_front();
+            }
+            return true;
         }
 
         if (!segment.isFile || segment.fileRemaining == 0)
