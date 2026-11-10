@@ -26,6 +26,7 @@
 #include <sys/sendfile.h>
 #include <cctype>
 #include <deque>
+#include <dirent.h>
 #include <csignal>
 
 struct Server

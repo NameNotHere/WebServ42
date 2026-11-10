@@ -119,10 +119,6 @@ namespace
         if (!path.empty() && path[path.size() - 1] == '/')
             path.erase(path.size() - 1);
         path += relativeTarget;
-        if (!path.empty() && path[path.size() - 1] == '/')
-            path += (location != NULL && !location->index.empty())
-                ? location->index
-                : "index.html";
         return path;
     }
 
@@ -215,6 +211,45 @@ std::string GetEnding(const std::string& path)
     return "application/octet-stream";
 }
 
+    bool sendDirectoryListing(int clientFd, const std::string& dirPath,
+                              const std::string& urlPath,
+                              const std::string& version, bool keepAlive,
+                              const ServerConfig& config)
+    {
+        DIR* dir = opendir(dirPath.c_str());
+        if (dir == NULL)
+            return sendErrorResponse(clientFd, version, keepAlive, 403, &config);
+
+        std::string body = "<html><body><h1>Index of " + urlPath + "</h1><ul>";
+
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            std::string name = entry->d_name;
+            if (name == "." || name == "..")
+                continue;
+            body += "<li><a href=\"" + urlPath + name + "\">" + name + "</a></li>";
+        }
+        closedir(dir);
+        body += "</ul></body></html>";
+
+        // Send headers + page
+        std::ostringstream response;
+        response << version << " 200 OK\r\n";
+        response << "Content-Type: text/html\r\n";
+        response << "Content-Length: " << body.size() << "\r\n";
+        if (keepAlive)
+            response << "Connection: keep-alive\r\n";
+        else
+            response << "Connection: close\r\n";
+        response << "\r\n";
+        response << body;
+
+        std::string out = response.str();
+        sendAll(clientFd, out.data(), out.size());
+        return true;
+    }
+
 bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config)
 {
     std::string target = normalizeTarget(http.getTarget());
@@ -242,8 +277,22 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     }
     if (redirectToSlash)
         return sendDirectoryRedirect(clientFd, version, decodedTarget);
+    std::string path = resolveGetPath(decodedTarget, location, config);
+    if (!path.empty() && path[path.size() - 1] == '/')
+    {
+        std::string index = "index.html";
+        if (location != NULL && !location->index.empty())
+            index = location->index;
 
-    const std::string path = resolveGetPath(decodedTarget, location, config);
+        struct stat info;
+        if (stat((path + index).c_str(), &info) == 0)
+            path += index;
+        else if (location != NULL && location->autoindex)
+            return sendDirectoryListing(clientFd, path, decodedTarget,
+                                        version, keepAlive, config);
+        else
+            path += index;
+    }
     return serveGetFile(clientFd, path, decodedTarget, version, keepAlive,
                         config);
 }

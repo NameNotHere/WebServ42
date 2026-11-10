@@ -99,6 +99,18 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         location.hasMaxBody = true;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
+    else if (keyword == "autoindex")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        std::string value = tokens[pos - 1].word;
+        if (value == "on")
+            location.autoindex = true;
+        else if (value == "off")
+            location.autoindex = false;
+        else
+            throw std::runtime_error("autoindex must be on or off");
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
     else
         throw std::runtime_error("unknown location directive: " + keyword);
 }

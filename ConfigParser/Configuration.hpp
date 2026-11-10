@@ -46,8 +46,9 @@ struct LocationConfig
     std::string cgi_path;
     size_t maxBody;
     bool hasMaxBody;
+    bool autoindex;
 
-    LocationConfig() : maxBody(0), hasMaxBody(false) {}
+    LocationConfig() : maxBody(0), hasMaxBody(false), autoindex(false) {}
 };
 
 struct ServerConfig
