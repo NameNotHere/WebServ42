@@ -1,7 +1,7 @@
 NAME		= webserv
 
 CXX			= c++
-CXXFLAGS = -O2 -Wall -Wextra -Werror -std=c++17 -I. -MMD -MP
+CXXFLAGS    = -O2 -Wall -Wextra -Werror -std=c++17 -I. -MMD -MP
 
 OBJ_DIR		= obj
 

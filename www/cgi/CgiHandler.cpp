@@ -401,7 +401,7 @@ bool CgiHandler::complete(const CgiJob& job) const
 	return job.childReaped && job.outputEof;
 }
 
-CGIResult CgiHandler::result(const CgiJob& job) const
+CGIResult CgiHandler::result(CgiJob& job) const
 {
 	CGIResult result;
 	result.exit_status = -1;
@@ -409,7 +409,7 @@ CGIResult CgiHandler::result(const CgiJob& job) const
 	result.io_error = job.ioError;
 	result.child_signaled = job.childSignaled;
 	result.error_message = job.errorMessage;
-	result.raw_output = job.output;
+	result.raw_output = std::move(job.output);
 	if (job.childReaped && WIFEXITED(job.waitStatus))
 		result.exit_status = WEXITSTATUS(job.waitStatus);
 	else if (job.childReaped && WIFSIGNALED(job.waitStatus))

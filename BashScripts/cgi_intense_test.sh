@@ -219,7 +219,7 @@ if probe_name:
 else:
     skipped += 9
 
-print(paint("bold", "  Failure handling and event-loop responsiveness"))
+print(paint("bold", "  Handling failures and event-loop responsiveness"))
 missing_raw = request_bytes("GET", "/cgi/.suite_missing_script.py")
 run("Missing CGI script returns server error", missing_raw, 500, why="A CGI execution failure should become an HTTP 500 response.")
 timeout_raw = request_bytes("GET", "/cgi/test.py?sleep=6")

@@ -56,6 +56,147 @@ namespace
         body = cached->second.body;
         return true;
     }
+
+    const LocationConfig* selectGetLocation(
+        const ServerConfig& config, const std::string& decodedTarget,
+        bool& redirectToSlash)
+    {
+        const LocationConfig* location =
+            findMatchingLocation(config, decodedTarget, "GET");
+        redirectToSlash = false;
+
+        if (!decodedTarget.empty()
+            && decodedTarget[decodedTarget.size() - 1] != '/')
+        {
+            const std::string slashTarget = decodedTarget + "/";
+            const LocationConfig* slashLocation =
+                findMatchingLocation(config, slashTarget, "GET");
+            if (slashLocation != NULL
+                && slashLocation->path == slashTarget
+                && (location == NULL
+                    || slashLocation->path.size() > location->path.size()))
+            {
+                redirectToSlash = true;
+                location = slashLocation;
+            }
+        }
+        return location;
+    }
+
+    bool sendDirectoryRedirect(int clientFd, const std::string& version,
+                               const std::string& decodedTarget)
+    {
+        std::ostringstream response;
+        response << version << " 301 Moved Permanently\r\n"
+                 << "Location: " << decodedTarget << "/\r\n"
+                 << "Content-Length: 0\r\n"
+                 << "Connection: close\r\n\r\n";
+        const std::string message = response.str();
+        sendAll(clientFd, message.data(), message.size());
+        return false;
+    }
+
+    std::string resolveGetPath(const std::string& decodedTarget,
+                               const LocationConfig* location,
+                               const ServerConfig& config)
+    {
+        const std::string& root =
+            (location != NULL && !location->root.empty())
+                ? location->root
+                : config.root;
+
+        std::string relativeTarget = decodedTarget;
+        if (location != NULL && location->path.compare(0, 2, "*.") != 0)
+        {
+            relativeTarget = decodedTarget.substr(location->path.size());
+            if (relativeTarget.empty())
+                relativeTarget = "/";
+            else if (relativeTarget[0] != '/')
+                relativeTarget.insert(0, "/");
+        }
+
+        std::string path = root.empty() ? "." : root;
+        if (!path.empty() && path[path.size() - 1] == '/')
+            path.erase(path.size() - 1);
+        path += relativeTarget;
+        if (!path.empty() && path[path.size() - 1] == '/')
+            path += (location != NULL && !location->index.empty())
+                ? location->index
+                : "index.html";
+        return path;
+    }
+
+    bool sendSmallFile(int clientFd, const std::string& path,
+                       const struct stat& info, const std::string& version,
+                       bool keepAlive, const ServerConfig& config)
+    {
+        std::string header;
+        std::string body;
+        if (!readSmallFile(path, info, version, header, body))
+        {
+            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            return false;
+        }
+        header += keepAlive ? "Connection: keep-alive\r\n\r\n"
+                            : "Connection: close\r\n\r\n";
+        sendAll(clientFd, header.data(), header.size());
+        sendAll(clientFd, body.data(), body.size());
+        return true;
+    }
+
+    bool sendLargeFile(int clientFd, const std::string& path,
+                       const struct stat& info, const std::string& version,
+                       bool keepAlive, const ServerConfig& config)
+    {
+        const int fileFd = open(path.c_str(), O_RDONLY);
+        if (fileFd == -1)
+        {
+            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            return std::cout << "Cant open fd\n", false;
+        }
+
+        std::ostringstream response;
+        response << version << " 200 " << statusText(200) << "\r\n";
+        response << "Content-Length: " << info.st_size << "\r\n";
+        response << "Content-Type: " << GetEnding(path) << "\r\n";
+        response << (keepAlive ? "Connection: keep-alive\r\n"
+                               : "Connection: close\r\n");
+        response << "\r\n";
+
+        const std::string header = response.str();
+        if (sendAll(clientFd, header.data(), header.size()) == -1)
+        {
+            close(fileFd);
+            return false;
+        }
+        return sendFileBody(clientFd, fileFd, info.st_size);
+    }
+
+    bool serveGetFile(int clientFd, const std::string& path,
+                      const std::string& decodedTarget,
+                      const std::string& version, bool keepAlive,
+                      const ServerConfig& config)
+    {
+        struct stat info;
+        if (stat(path.c_str(), &info) == -1)
+        {
+            sendErrorResponse(clientFd, version, keepAlive, 404, &config);
+            return false;
+        }
+        if (S_ISDIR(info.st_mode) && !decodedTarget.empty()
+            && decodedTarget[decodedTarget.size() - 1] != '/')
+            return sendDirectoryRedirect(clientFd, version, decodedTarget);
+        if (!S_ISREG(info.st_mode))
+        {
+            sendErrorResponse(clientFd, version, keepAlive, 404, &config);
+            return false;
+        }
+        if (info.st_size <= SMALL_FILE_LIMIT)
+            return sendSmallFile(clientFd, path, info, version, keepAlive,
+                                 config);
+        return sendLargeFile(clientFd, path, info, version, keepAlive,
+                             config);
+    }
 }
 
 std::string GetEnding(const std::string& path)
@@ -82,25 +223,9 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
     if (!decodeUriPath(target, decodedTarget))
         return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
 
-    const LocationConfig* location =
-        findMatchingLocation(config, decodedTarget, "GET");
     bool redirectToSlash = false;
-
-    if (!decodedTarget.empty()
-        && decodedTarget[decodedTarget.size() - 1] != '/')
-    {
-        const std::string slashTarget = decodedTarget + "/";
-        const LocationConfig* slashLocation =
-            findMatchingLocation(config, slashTarget, "GET");
-        if (slashLocation != NULL
-            && slashLocation->path == slashTarget
-            && (location == NULL
-                || slashLocation->path.size() > location->path.size()))
-        {
-            location = slashLocation;
-            redirectToSlash = true;
-        }
-    }
+    const LocationConfig* location =
+        selectGetLocation(config, decodedTarget, redirectToSlash);
 
     if (!isMethodAllowed(config, location, "GET"))
     {
@@ -116,98 +241,9 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         return false;
     }
     if (redirectToSlash)
-    {
-        std::ostringstream response;
-        response << version << " 301 Moved Permanently\r\n"
-                 << "Location: " << decodedTarget << "/\r\n"
-                 << "Content-Length: 0\r\n"
-                 << "Connection: close\r\n\r\n";
-        const std::string message = response.str();
-        sendAll(clientFd, message.data(), message.size());
-        return false;
-    }
-    const std::string& root =
-        (location != NULL && !location->root.empty())
-            ? location->root
-            : config.root;
+        return sendDirectoryRedirect(clientFd, version, decodedTarget);
 
-    std::string relativeTarget = decodedTarget;
-    if (location != NULL && location->path.compare(0, 2, "*.") != 0)
-    {
-        relativeTarget = decodedTarget.substr(location->path.size());
-        if (relativeTarget.empty())
-            relativeTarget = "/";
-        else if (relativeTarget[0] != '/')
-            relativeTarget.insert(0, "/");
-    }
-
-    std::string path = root.empty() ? "." : root;
-    if (!path.empty() && path[path.size() - 1] == '/')
-        path.erase(path.size() - 1);
-    path += relativeTarget;
-    if (!path.empty() && path[path.size() - 1] == '/')
-        path += (location != NULL && !location->index.empty())
-            ? location->index
-            : "index.html";
-    struct stat st;
-    if (stat(path.c_str(), &st) == -1)
-    {
-        sendErrorResponse(clientFd, version, keepAlive, 404, &config);
-        return false;
-    }
-    if (S_ISDIR(st.st_mode) && !decodedTarget.empty()
-        && decodedTarget[decodedTarget.size() - 1] != '/')
-    {
-        std::ostringstream response;
-        response << version << " 301 Moved Permanently\r\n"
-                 << "Location: " << decodedTarget << "/\r\n"
-                 << "Content-Length: 0\r\n"
-                 << "Connection: close\r\n\r\n";
-        const std::string message = response.str();
-        sendAll(clientFd, message.data(), message.size());
-        return false;
-    }
-    if (!S_ISREG(st.st_mode))
-    {
-        sendErrorResponse(clientFd, version, keepAlive, 404, &config);
-        return false;
-    }
-
-    if (st.st_size <= SMALL_FILE_LIMIT)
-    {
-        std::string header;
-        std::string body;
-        if (!readSmallFile(path, st, version, header, body))
-        {
-            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
-            return false;
-        }
-        header += keepAlive ? "Connection: keep-alive\r\n\r\n"
-                            : "Connection: close\r\n\r\n";
-        sendAll(clientFd, header.data(), header.size());
-        sendAll(clientFd, body.data(), body.size());
-        return true;
-    }
-
-    const int fd_in = open(path.c_str(), O_RDONLY);
-    if (fd_in == -1)
-    {
-        sendErrorResponse(clientFd, version, keepAlive, 500, &config);
-        return std::cout << "Cant open fd\n", false;
-    }
-
-    std::ostringstream hdr;
-    hdr << version << " 200 " << statusText(200) << "\r\n";
-    hdr << "Content-Length: " << st.st_size << "\r\n";
-    hdr << "Content-Type: " << GetEnding(path) << "\r\n";
-    hdr << (keepAlive ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
-    hdr << "\r\n";
-
-    const std::string header = hdr.str();
-    if (sendAll(clientFd, header.data(), header.size()) == -1)
-    {
-        close(fd_in);
-        return false;
-    }
-    return sendFileBody(clientFd, fd_in, st.st_size);
+    const std::string path = resolveGetPath(decodedTarget, location, config);
+    return serveGetFile(clientFd, path, decodedTarget, version, keepAlive,
+                        config);
 }

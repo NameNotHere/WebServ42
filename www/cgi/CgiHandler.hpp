@@ -94,7 +94,7 @@ public:
 	void pipeError(CgiJob& job, bool inputPipe) const;
 	void update(CgiJob& job) const;
 	bool complete(const CgiJob& job) const;
-	CGIResult result(const CgiJob& job) const;
+	CGIResult result(CgiJob& job) const;
 	void cancel(CgiJob& job) const;
 };
 
