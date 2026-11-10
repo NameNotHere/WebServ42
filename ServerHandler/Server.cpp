@@ -21,7 +21,7 @@ namespace
     const size_t LARGE_POST_THRESHOLD = 8 * 1024 * 1024;
     // Large CGI requests and responses are buffered in memory. Limit the
     // number active at once to cap memory use while allowing concurrent work.
-    const size_t MAX_BUFFERED_LARGE_POSTS = 3;
+    const size_t MAX_BUFFERED_LARGE_POSTS = 5;
     std::set<int> largePostClients;
     std::set<int> largePostWaiters;
     std::set<int> peerClosedClients;
