@@ -390,39 +390,22 @@ namespace
             return;
 
         char buffer[262144];
-        size_t bytesReceived = 0;
-        const size_t maxBytesPerEvent = 1024 * 1024;
-        bool disconnected = false;
-        bool peerClosed = false;
-        while (bytesReceived < maxBytesPerEvent)
+        ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
+
+        if (bytesRead < 0)
         {
-            size_t capacity = sizeof(buffer);
-            if (capacity > maxBytesPerEvent - bytesReceived)
-                capacity = maxBytesPerEvent - bytesReceived;
-            ssize_t bytesRead = recv(fd, buffer, capacity, 0);
-            if (bytesRead == 0)
-            {
-                peerClosed = true;
-                break;
-            }
-            if (bytesRead < 0)
-            {
-                if (errno == EINTR)
-                    continue;
-                if (errno != EAGAIN && errno != EWOULDBLOCK)
-                {
-                    removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
-                    disconnected = true;
-                }
-                break;
-            }
-            reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
-            bytesReceived += static_cast<size_t>(bytesRead);
-        }
-        if (disconnected)
+            removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
             return;
-        if (bytesReceived != 0)
+        }
+
+        bool peerClosed = (bytesRead == 0);
+
+        if (bytesRead > 0)
+        {
+            reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
             runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
+        }
+
         if (peerClosed)
         {
             peerClosedClients.insert(fd);
