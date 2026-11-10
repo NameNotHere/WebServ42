@@ -20,3 +20,9 @@
 - HandleGet is 100+ lines
 - buildResponse maybe too big
 - REMOVE AGENTS.md before eval
+
+ERROR CODES
+
+- 405 Method Not Allowed means the server recognizes the method, but this resource doesn’t allow it. For example, the server supports POST, but /images/logo.png only allows GET.
+  501 Not Implemented means the server doesn’t recognize or implement the method at all. In your project, methods outside GET, POST, and DELETE should get 501.
+  One HTTP detail: a 405 response should include an Allow header listing the methods accepted for that resource.

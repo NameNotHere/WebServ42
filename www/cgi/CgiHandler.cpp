@@ -317,13 +317,15 @@ void CgiHandler::writeInput(CgiJob& job) const
 		if (job.bodyOffset == job.requestBody.size())
 			closeDescriptor(job.stdinFd);
 	}
+	else
+		pipeError(job, true);
 }
 
 void CgiHandler::readOutput(CgiJob& job) const
 {
 	if (job.stdoutFd == -1)
 		return;
-	char buffer[4096];
+	char buffer[262144];
 	ssize_t bytesRead = read(job.stdoutFd, buffer, sizeof(buffer));
 	if (bytesRead > 0)
 	{
@@ -343,6 +345,8 @@ void CgiHandler::readOutput(CgiJob& job) const
 		closeDescriptor(job.stdoutFd);
 		job.outputEof = true;
 	}
+	else
+		pipeError(job, false);
 }
 
 void CgiHandler::pipeError(CgiJob& job, bool inputPipe) const

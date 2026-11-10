@@ -1,5 +1,4 @@
 #include "Server.hpp"
-#include <cerrno>
 #include <set>
 
 namespace
@@ -25,32 +24,14 @@ namespace
     const size_t MAX_BUFFERED_LARGE_POSTS = 3;
     std::set<int> largePostClients;
     std::set<int> peerClosedClients;
-    const size_t MAX_CGI_PIPE_BYTES_PER_EVENT = 1024 * 1024;
-
     void drainCgiInput(CgiHandler& cgi, CgiJob& job)
     {
-        size_t initialOffset = job.bodyOffset;
-        while (job.stdinFd != -1
-               && job.bodyOffset - initialOffset < MAX_CGI_PIPE_BYTES_PER_EVENT)
-        {
-            size_t previousOffset = job.bodyOffset;
-            cgi.writeInput(job);
-            if (job.bodyOffset == previousOffset)
-                break;
-        }
+        cgi.writeInput(job);
     }
 
     void drainCgiOutput(CgiHandler& cgi, CgiJob& job)
     {
-        size_t initialSize = job.output.size();
-        while (job.stdoutFd != -1
-               && job.output.size() - initialSize < MAX_CGI_PIPE_BYTES_PER_EVENT)
-        {
-            size_t previousSize = job.output.size();
-            cgi.readOutput(job);
-            if (job.output.size() == previousSize)
-                break;
-        }
+        cgi.readOutput(job);
     }
 
     bool isLargePost(const HttpParser& http)
@@ -391,7 +372,6 @@ namespace
 
         char buffer[262144];
         ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
-
         if (bytesRead < 0)
         {
             removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
@@ -463,7 +443,11 @@ namespace
             job->second.requestBody.clear();
             std::string().swap(job->second.requestBody);
             CGIResult result = cgi.result(job->second);
-            queueCgiResponse(clientFd, job->second, result);
+            std::map<int, ServerConfig>::const_iterator config =
+                clientConfigs.find(clientFd);
+            queueCgiResponse(clientFd, job->second, result,
+                             config == clientConfigs.end() ? NULL
+                                                           : &config->second);
             bool keepAlive = job->second.keepAlive;
             cgi.cancel(job->second);
             cgiJobs.erase(job);
@@ -534,8 +518,11 @@ namespace
             if (request[i] == '\n'
                 && (i == 0 || request[i - 1] != '\r'))
             {
-                std::string response = Response::create(400, "");
-                sendAll(fd, response.data(), response.size());
+                std::map<int, ServerConfig>::iterator config =
+                    clientConfigs.find(fd);
+                sendErrorResponse(fd, "HTTP/1.1", false, 400,
+                                  config == clientConfigs.end() ? NULL
+                                                                : &config->second);
                 closeAfterPendingOutput(fd);
                 reqs.erase(fd);
                 clientConfigs.erase(fd);
@@ -606,13 +593,23 @@ namespace
     {
         int code = 400;
         if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED) code = 405;
-        else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
         // else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
+        else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
         else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND) code = 404;
         else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED) code = 505;
         else if (status == HttpParser::REQUEST_CONTENT_TOO_LARGE) code = 413;
-        std::string response = Response::create(code, "");
-        sendAll(fd, response.data(), response.size());
+        std::map<int, ServerConfig>::iterator config =
+            clientConfigs.find(fd);
+        std::vector<std::pair<std::string, std::string> > extraHeaders;
+        if (code == 405 && config != clientConfigs.end())
+        {
+            extraHeaders.push_back(std::make_pair(
+                "Allow", allowHeaderValue(config->second, NULL)));
+        }
+        sendErrorResponse(fd, "HTTP/1.1", false, code,
+                          config == clientConfigs.end() ? NULL
+                                                        : &config->second,
+                          extraHeaders);
         closeAfterPendingOutput(fd);
         reqs.erase(fd);
         clientConfigs.erase(fd);

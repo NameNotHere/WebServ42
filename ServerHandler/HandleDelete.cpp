@@ -6,18 +6,21 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
     std::string decodedTarget;
 
     if (!decodeUriPath(target, decodedTarget))
-        return sendErrorResponse(clientFd, version, keepAlive, 400);
+        return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
 
     if (target.find("..") != std::string::npos)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 400);
+        sendErrorResponse(clientFd, version, keepAlive, 400, &config);
         return false;
     }
 
     const LocationConfig* location = findMatchingLocation(config, target, "DELETE");
     if (!isMethodAllowed(config, location, "DELETE"))
     {
-        sendErrorResponse(clientFd, version, keepAlive, 405);
+        sendErrorResponse(
+            clientFd, version, keepAlive, 405, &config,
+            std::vector<std::pair<std::string, std::string> >(1,
+                std::make_pair("Allow", allowHeaderValue(config, location))));
         return false;
     }
 
@@ -25,17 +28,17 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 404);
+        sendErrorResponse(clientFd, version, keepAlive, 404, &config);
         return false;
     }
     if (S_ISDIR(fileStat.st_mode))
     {
-        sendErrorResponse(clientFd, version, keepAlive, 403);
+        sendErrorResponse(clientFd, version, keepAlive, 403, &config);
         return false;
     }
     if (access(filePath.c_str(), W_OK) != 0)
     {
-        sendErrorResponse(clientFd, version, keepAlive, 403);
+        sendErrorResponse(clientFd, version, keepAlive, 403, &config);
         return false;
     }
     if (unlink(filePath.c_str()) == 0)
@@ -51,7 +54,7 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
     }
     else
     {
-        sendErrorResponse(clientFd, version, keepAlive, 500);
+        sendErrorResponse(clientFd, version, keepAlive, 500, &config);
         return false;
     }
 }

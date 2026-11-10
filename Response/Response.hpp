@@ -13,7 +13,6 @@ public:
 	Response& operator=(const Response& other);
 	~Response();
 
-	static std::string create(int statusCode, const std::string& body);
 	static std::string statusMsg(int statusCode);
 };
 
