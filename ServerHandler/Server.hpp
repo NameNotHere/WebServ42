@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <utility>
 #include <fcntl.h>
-#include <sys/sendfile.h>
 #include <cctype>
 #include <deque>
 #include <dirent.h>

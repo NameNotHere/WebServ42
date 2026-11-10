@@ -1,8 +1,5 @@
 - Actually do something with the buildResponse bool.
 
--The response code sends data directly, including through sendAll and sendfile,
-  instead of waiting for write readiness. A slow client could hold up the server. 
-
 - Several required config features aren’t implemented: The parser only handles a limited set of directives.
   I didn’t find support for maximum request-body size, redirects, configurable directory listing, or a configurable index file.
   CGI is present, but its interpreter and extensions are hard-coded rather than configured per route.
