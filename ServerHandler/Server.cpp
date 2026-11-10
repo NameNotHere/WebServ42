@@ -23,7 +23,26 @@ namespace
     // number active at once to cap memory use while allowing concurrent work.
     const size_t MAX_BUFFERED_LARGE_POSTS = 3;
     std::set<int> largePostClients;
+    std::set<int> largePostWaiters;
     std::set<int> peerClosedClients;
+
+    void promoteLargePostWaiters(
+        const std::vector<pollfd>& fds,
+        const std::map<int, std::string>& reqs)
+    {
+        while (largePostClients.size() < MAX_BUFFERED_LARGE_POSTS
+               && !largePostWaiters.empty())
+        {
+            int fd = *largePostWaiters.begin();
+            largePostWaiters.erase(largePostWaiters.begin());
+            bool connected = false;
+            for (size_t i = 0; i < fds.size(); ++i)
+                if (fds[i].fd == fd)
+                    connected = true;
+            if (connected && reqs.find(fd) != reqs.end())
+                largePostClients.insert(fd);
+        }
+    }
     void drainCgiInput(CgiHandler& cgi, CgiJob& job)
     {
         cgi.writeInput(job);
@@ -82,6 +101,7 @@ namespace
         requests.erase(fd);
         configs.erase(fd);
         largePostClients.erase(fd);
+        largePostWaiters.erase(fd);
         peerClosedClients.erase(fd);
         for (size_t i = 0; i < fds.size(); ++i)
         {
@@ -217,8 +237,7 @@ namespace
             fds[i].events = 0;
             if (cgiJobs.find(fd) == cgiJobs.end()
                 && !shouldCloseAfterOutput(fd)
-                && (largePostClients.count(fd)
-                    || largePostClients.size() < MAX_BUFFERED_LARGE_POSTS))
+                && !largePostWaiters.count(fd))
                 fds[i].events |= POLLIN;
             if (hasPendingOutput(fd))
                 fds[i].events |= POLLOUT;
@@ -366,8 +385,7 @@ namespace
                 removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
             return;
         }
-        if (!largePostClients.count(fd)
-            && largePostClients.size() >= MAX_BUFFERED_LARGE_POSTS)
+        if (largePostWaiters.count(fd))
             return;
 
         char buffer[262144];
@@ -475,6 +493,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
 
     while (true)
     {
+        promoteLargePostWaiters(fds, reqs);
         updateClientPollEvents(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
 
         std::vector<pollfd> pollFds;
@@ -522,6 +541,8 @@ namespace
                 closeAfterPendingOutput(fd);
                 reqs.erase(fd);
                 clientConfigs.erase(fd);
+                largePostClients.erase(fd);
+                largePostWaiters.erase(fd);
                 return;
             }
         }
@@ -566,6 +587,7 @@ namespace
         reqs[fd].erase(0, requestLen);
         if (cgiJobs.find(fd) == cgiJobs.end())
             largePostClients.erase(fd);
+        largePostWaiters.erase(fd);
         if (cgiJobs.find(fd) != cgiJobs.end())
         {
             if (reqs[fd].empty())
@@ -609,6 +631,8 @@ namespace
         closeAfterPendingOutput(fd);
         reqs.erase(fd);
         clientConfigs.erase(fd);
+        largePostClients.erase(fd);
+        largePostWaiters.erase(fd);
     }
 }
 
@@ -639,12 +663,21 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         else if (status == HttpParser::REQUEST_INCOMPLETE)
         {
             if (isLargePost(http))
-                largePostClients.insert(fd);
+            {
+                if (largePostClients.count(fd))
+                    return;
+                if (largePostClients.size() < MAX_BUFFERED_LARGE_POSTS)
+                    largePostClients.insert(fd);
+                else
+                    largePostWaiters.insert(fd);
+            }
             return;
         }
         else
         {
             sendParserErrorResponse(fd, status, reqs, clientConfigs);
+            largePostClients.erase(fd);
+            largePostWaiters.erase(fd);
             return;
         }
     }
