@@ -1,0 +1,175 @@
+#include "Configuration.hpp"
+
+void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, ServerConfig& server)
+{
+    std::string keyword = tokens[pos].word;
+
+    pos++;
+    if (keyword == "listen")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        server.listen = static_cast<unsigned int>(std::stoi(tokens[pos - 1].word));
+    }
+    else if (keyword == "root")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        server.root = tokens[pos - 1].word;
+    }
+    else if (keyword == "err")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        int code = std::stoi(tokens[pos - 1].word);
+        if (code < 100 || code > 599)
+            throw std::runtime_error("Invalid error code\n");
+        expect_and_increase(tokens, pos, WORD);
+        server.errors[code] = tokens[pos - 1].word;
+        std::filesystem::path err_path(server.errors[code]);
+        if (!std::filesystem::exists(err_path))
+            throw std::runtime_error("Error page file does not exist: " + server.errors[code]);
+    }
+    else
+        throw std::runtime_error("unknown server directive: " + keyword);
+    expect_and_increase(tokens, pos, SEMICOLON);
+}
+
+void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, LocationConfig& location)
+{
+    if (pos >= tokens.size())
+        throw std::runtime_error("unexpected end of file");
+
+    std::string keyword = tokens[pos].word;
+    pos++;
+    if (keyword == "root")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.root = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "allowed_methods")
+    {
+        while (pos < tokens.size() && tokens[pos].type != SEMICOLON)
+        {
+            expect_and_increase(tokens, pos, WORD);
+            location.allowed_methods.push_back(tokens[pos - 1].word);
+        }
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "index")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.index = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "cgi_path")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.cgi_path = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "upload_dir")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        location.uploadDir = tokens[pos - 1].word;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "maxBody")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        const std::string& value = tokens[pos - 1].word;
+
+        if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+            throw std::runtime_error("invalid maxBody value");
+
+        unsigned long long limit;
+        try
+        {
+            limit = std::stoull(value);
+        }
+        catch (const std::exception&)
+        {
+            throw std::runtime_error("invalid maxBody value");
+        }
+
+        if (limit == 0 || limit > std::numeric_limits<size_t>::max())
+            throw std::runtime_error("maxBody must be a positive size");
+
+        location.maxBody = static_cast<size_t>(limit);
+        location.hasMaxBody = true;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else if (keyword == "autoindex")
+    {
+        expect_and_increase(tokens, pos, WORD);
+        std::string value = tokens[pos - 1].word;
+        if (value == "on")
+            location.autoindex = true;
+        else if (value == "off")
+            location.autoindex = false;
+        else
+            throw std::runtime_error("autoindex must be on or off");
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
+    else
+        throw std::runtime_error("unknown location directive: " + keyword);
+}
+
+LocationConfig parse_location(const std::vector<Token>& tokens, size_t& pos)
+{
+    LocationConfig location;
+
+    expect_and_increase(tokens, pos, WORD);
+    expect_and_increase(tokens, pos, WORD);
+    location.path = tokens[pos - 1].word;
+    expect_and_increase(tokens, pos, LEFTBRACE);
+    while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
+        parse_location_directive(tokens, pos, location);
+    expect_and_increase(tokens, pos, RIGHTBRACE);
+
+    return location;
+}
+
+ALLOWED_METHODS parse_method(const std::string& method)
+{
+    if (method == "GET")
+        return GET;
+    if (method == "POST")
+        return POST;
+    if (method == "DELETE")
+        return DELETE;
+    throw std::runtime_error("unknown HTTP method: " + method);
+}
+
+ServerConfig parse_server(const std::vector<Token>& tokens, size_t& pos)
+{
+    ServerConfig server;
+    LocationConfig location;
+
+    expect_and_increase(tokens, pos, WORD);
+    if (pos < tokens.size() && tokens[pos].type == WORD)
+        server.name = tokens[pos++].word;
+    expect_and_increase(tokens, pos, LEFTBRACE);
+
+    while (pos < tokens.size() && tokens[pos].type != RIGHTBRACE)
+    {
+        if (tokens[pos].word == "location")
+        {
+            location = parse_location(tokens, pos);
+            server.locations.push_back(location);
+        }
+        else if (tokens[pos].word == "allowed_methods")
+        {
+            pos++;
+            while (pos < tokens.size() && tokens[pos].type != SEMICOLON)
+            {
+                expect_and_increase(tokens, pos, WORD);
+                server.allowed_methods.push_back(parse_method(tokens[pos - 1].word));
+            }
+            expect_and_increase(tokens, pos, SEMICOLON);
+        }
+        else
+            parse_server_directive(tokens, pos, server);
+    }
+    expect_and_increase(tokens, pos, RIGHTBRACE);
+
+    return server;
+}

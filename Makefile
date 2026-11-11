@@ -12,6 +12,7 @@ SRCS		= httpParser/HttpParser.cpp \
 			  httpParser/HeaderUtils.cpp \
 			  httpParser/HeaderValues.cpp \
 			  httpParser/ContentType.cpp \
+			  ConfigParser/ConfigDirectiveParser.cpp \
 			  ConfigParser/ConfigParser.cpp \
 			  ConfigParser/ConfigLex.cpp \
 			  ServerHandler/Server.cpp \
