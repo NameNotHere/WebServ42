@@ -1,7 +1,7 @@
 NAME		= webserv
 
 CXX			= c++
-CXXFLAGS    = -O2 -Wall -Wextra -Werror -std=c++17 -I. -MMD -MP
+CXXFLAGS    = -O2 -Wall -Wextra -Werror -I. -MMD -MP
 
 OBJ_DIR		= obj
 
@@ -16,7 +16,6 @@ SRCS		= httpParser/HttpParser.cpp \
 			  ConfigParser/ConfigParser.cpp \
 			  ConfigParser/ConfigLex.cpp \
 			  ServerHandler/Server.cpp \
-			  Response/Response.cpp \
 			  ServerHandler/HandleGet.cpp \
 			  ServerHandler/HandleDelete.cpp \
 			  ServerHandler/HandlePost.cpp \

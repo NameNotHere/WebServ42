@@ -7,9 +7,12 @@
 - Should remove ternaary operators through out the project unless we can explain them
 - Sort out error codes in server.cpp
 - be able to recreate temp.conf for eval 
-- HandleGet is 100+ lines
 - buildResponse maybe too big
+- Possible subject conflict: Responder.cpp (ServerHandler/Responder.cpp:206) checks errno after send().
+  The subject prohibits using errno to adjust behavior after read/write operations and also names send as a write operation.
 - REMOVE AGENTS.md before eval
+- Check all files again for any weird shit
+
 
 ERROR CODES
 

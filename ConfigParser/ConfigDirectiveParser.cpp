@@ -97,6 +97,26 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         location.hasMaxBody = true;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
+    else if (keyword == "return")
+    {
+        if (location.redirectCode != 0)
+            throw std::runtime_error("duplicate return directive");
+
+        expect_and_increase(tokens, pos, WORD);
+        const std::string& codeText = tokens[pos - 1].word;
+        if (codeText.empty()
+            || codeText.find_first_not_of("0123456789") != std::string::npos)
+            throw std::runtime_error("return status must be 301 or 302");
+
+        unsigned int code = static_cast<unsigned int>(std::stoi(codeText));
+        if (code != 301 && code != 302)
+            throw std::runtime_error("return status must be 301 or 302");
+
+        expect_and_increase(tokens, pos, WORD);
+        location.redirectTarget = tokens[pos - 1].word;
+        location.redirectCode = code;
+        expect_and_increase(tokens, pos, SEMICOLON);
+    }
     else if (keyword == "autoindex")
     {
         expect_and_increase(tokens, pos, WORD);

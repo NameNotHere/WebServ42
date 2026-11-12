@@ -44,6 +44,8 @@ struct LocationConfig
     std::string index;
     std::string uploadDir;
     std::string cgi_path;
+    unsigned int redirectCode = 0;
+    std::string redirectTarget;
     size_t maxBody =        0;
     bool hasMaxBody =       false;
     bool autoindex =        false;

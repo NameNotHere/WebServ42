@@ -1,16 +1,18 @@
+# AGENTS.md
+
 This project is my 42 Webserv C++ HTTP server.
 
 Project environment:
-- C++11 compatibility is required.
+- C++ compatibility is required.
 - The server runs in Ubuntu under WSL, with VS Code as my editor.
 - The server uses poll() and supports HTTP request parsing, GET, POST, DELETE and CGI.
 - My current server listens on ports 2020 and 8080.
 - I want to complete the mandatory requirements only.
+- The subject pdf says c++98 only but ignore that.
 
-# AGENTS.md
 # Webserv Project Engineering Rules
 
-# Allowed external function
+# Allowed external functions
 
 execve, pipe, strerror, gai_strerror, errno, dup,
 dup2, fork, socketpair, htons, htonl, ntohs, ntohl,
@@ -21,6 +23,7 @@ getaddrinfo, freeaddrinfo, setsockopt, getsockname,
 getprotobyname, fcntl, close, read, write, waitpid,
 kill, signal, access, stat, open, opendir, readdir
 and closedir.
+You can use all c++ standard library functions.
 
 ## 1. YOUR ROLE
 

@@ -1,5 +1,4 @@
 #include "Server.hpp"
-#include <cerrno>
 
 namespace
 {
@@ -58,6 +57,7 @@ std::string statusText(int code)
         case 201: return "Created";
         case 204: return "No Content";
         case 301: return "Moved Permanently";
+        case 302: return "Found";
         case 400: return "Bad Request";
         case 403: return "Forbidden";
         case 404: return "Not Found";
@@ -204,13 +204,10 @@ bool flushPendingOutput(int clientFd)
                                      it->bytes.size() - it->offset);
 
                     ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
-                    if (sent <= 0)
-                    {
-                        if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
-                                           || errno == EINTR))
-                            return true;
+                    if (sent < 0)
+                        return true;
+                    if (sent == 0)
                         return false;
-                    }
 
                     size_t remaining = static_cast<size_t>(sent);
                     while (remaining > 0 && !output->second.segments.empty())
@@ -234,13 +231,10 @@ bool flushPendingOutput(int clientFd)
 
             ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                                 segment.bytes.size() - segment.offset, 0);
-            if (sent <= 0)
-            {
-                if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
-                                   || errno == EINTR))
-                    return true;
+            if (sent < 0)
+                return true;
+            if (sent == 0)
                 return false;
-            }
             segment.offset += static_cast<size_t>(sent);
             if (segment.offset < segment.bytes.size())
                 return true;
@@ -367,6 +361,20 @@ bool buildResponse(HttpParser& http, int clientFd,
 
     const LocationConfig* location =
         findMatchingLocation(config, http.getTarget(), toUpper(http.getMethod()));
+    if (location != NULL && location->redirectCode != 0)
+    {
+        std::ostringstream response;
+        response << version << " " << location->redirectCode << " "
+                 << statusText(location->redirectCode) << "\r\n"
+                 << "Location: " << location->redirectTarget << "\r\n"
+                 << "Content-Length: 0\r\n"
+                 << (keepAlive ? "Connection: keep-alive\r\n"
+                               : "Connection: close\r\n")
+                 << "\r\n";
+        const std::string message = response.str();
+        return sendAll(clientFd, message.data(), message.size()) != -1;
+    }
+
     const bool configuredCgi = location != NULL
         && location->path.compare(0, 2, "*.") == 0
         && !location->cgi_path.empty()

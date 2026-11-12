@@ -113,26 +113,45 @@ namespace
 		envp.push_back(NULL);
 	}
 
+	[[noreturn]] void terminateCgiChild(int status,
+		std::vector<char*>& envp)
+	{
+		char* command = const_cast<char*>(status == 1 ? "exit 1"
+			: status == 126 ? "exit 126" : "exit 127");
+		char* shellArgv[4];
+		shellArgv[0] = const_cast<char*>("/bin/sh");
+		shellArgv[1] = const_cast<char*>("-c");
+		shellArgv[2] = command;
+		shellArgv[3] = NULL;
+		execve("/bin/sh", shellArgv, envp.data());
+
+		char* fallbackArgv[2];
+		fallbackArgv[0] = const_cast<char*>("/bin/false");
+		fallbackArgv[1] = NULL;
+		while (true)
+			execve("/bin/false", fallbackArgv, envp.data());
+	}
+
 	void executeCgiChild(const std::string& interpreter,
 		const std::string& scriptPath, const std::string& argument,
 		std::vector<char*>& envp, int inputPipe[2], int outputPipe[2])
 	{
 		if (dup2(inputPipe[0], STDIN_FILENO) == -1
 			|| dup2(outputPipe[1], STDOUT_FILENO) == -1)
-			_exit(1);
+			terminateCgiChild(1, envp);
 		close(inputPipe[0]);
 		close(inputPipe[1]);
 		close(outputPipe[0]);
 		close(outputPipe[1]);
 		if (chdir(scriptDirectory(scriptPath).c_str()) == -1)
-			_exit(126);
+			terminateCgiChild(126, envp);
 
 		char* argv[3];
 		argv[0] = const_cast<char*>(interpreter.c_str());
 		argv[1] = const_cast<char*>(argument.c_str());
 		argv[2] = NULL;
 		execve(interpreter.c_str(), argv, envp.data());
-		_exit(127);
+		terminateCgiChild(127, envp);
 	}
 
 	bool configureParentPipes(pid_t pid, int inputPipe[2], int outputPipe[2])
@@ -366,11 +385,16 @@ void CgiHandler::update(CgiJob& job) const
 		job.timedOut = true;
 		job.terminationSent = true;
 		job.killDeadlineMs = now + KILL_GRACE_MS;
-		signalCgiProcess(job.pid, SIGTERM);
+		if (!job.childReaped)
+			signalCgiProcess(job.pid, SIGTERM);
 	}
-	else if (job.terminationSent && !job.childReaped
-		&& now >= job.killDeadlineMs)
-		signalCgiProcess(job.pid, SIGKILL);
+	else if (job.terminationSent && now >= job.killDeadlineMs)
+	{
+		if (!job.childReaped)
+			signalCgiProcess(job.pid, SIGKILL);
+		closeDescriptor(job.stdoutFd);
+		job.outputEof = true;
+	}
 
 	if (!job.childReaped)
 	{
