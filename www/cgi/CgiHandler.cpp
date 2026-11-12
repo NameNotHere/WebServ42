@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <utility>
 
@@ -14,17 +15,13 @@ namespace
 
 	long long nowMilliseconds()
 	{
-		struct timespec value;
-		if (clock_gettime(CLOCK_MONOTONIC, &value) == -1)
-			return 0;
-		return static_cast<long long>(value.tv_sec) * 1000
-			+ value.tv_nsec / 1000000;
+		return std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
 	}
 
 	bool setNonBlocking(int fd)
 	{
-		int flags = fcntl(fd, F_GETFL, 0);
-		return flags != -1 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1;
+		return fcntl(fd, F_SETFL, O_NONBLOCK) != -1;
 	}
 
 	std::string scriptDirectory(const std::string& script)
@@ -56,12 +53,11 @@ namespace
 		}
 	}
 
-	void signalProcessGroup(pid_t pid, int signalNumber)
+	void signalCgiProcess(pid_t pid, int signalNumber)
 	{
 		if (pid <= 0)
 			return;
-		if (kill(-pid, signalNumber) == -1)
-			kill(pid, signalNumber);
+		kill(pid, signalNumber);
 	}
 
 	std::string headerValue(const std::map<std::string, std::string>& headers,
@@ -121,7 +117,6 @@ namespace
 		const std::string& scriptPath, const std::string& argument,
 		std::vector<char*>& envp, int inputPipe[2], int outputPipe[2])
 	{
-		setpgid(0, 0);
 		if (dup2(inputPipe[0], STDIN_FILENO) == -1
 			|| dup2(outputPipe[1], STDOUT_FILENO) == -1)
 			_exit(1);
@@ -144,10 +139,9 @@ namespace
 	{
 		closeDescriptor(inputPipe[0]);
 		closeDescriptor(outputPipe[1]);
-		setpgid(pid, pid);
 		if (!setNonBlocking(inputPipe[1]) || !setNonBlocking(outputPipe[0]))
 		{
-			signalProcessGroup(pid, SIGKILL);
+			signalCgiProcess(pid, SIGKILL);
 			closeDescriptor(inputPipe[1]);
 			closeDescriptor(outputPipe[0]);
 			while (waitpid(pid, NULL, 0) == -1 && errno == EINTR) {}
@@ -333,7 +327,7 @@ void CgiHandler::readOutput(CgiJob& job) const
 		{
 			job.ioError = true;
 			job.errorMessage = "CGI output exceeded the configured limit";
-			signalProcessGroup(job.pid, SIGKILL);
+			signalCgiProcess(job.pid, SIGKILL);
 			closeDescriptor(job.stdoutFd);
 			job.outputEof = true;
 			return;
@@ -372,11 +366,11 @@ void CgiHandler::update(CgiJob& job) const
 		job.timedOut = true;
 		job.terminationSent = true;
 		job.killDeadlineMs = now + KILL_GRACE_MS;
-		signalProcessGroup(job.pid, SIGTERM);
+		signalCgiProcess(job.pid, SIGTERM);
 	}
 	else if (job.terminationSent && !job.childReaped
 		&& now >= job.killDeadlineMs)
-		signalProcessGroup(job.pid, SIGKILL);
+		signalCgiProcess(job.pid, SIGKILL);
 
 	if (!job.childReaped)
 	{
@@ -421,7 +415,7 @@ void CgiHandler::cancel(CgiJob& job) const
 {
 	if (job.pid > 0 && !job.childReaped)
 	{
-		signalProcessGroup(job.pid, SIGKILL);
+		signalCgiProcess(job.pid, SIGKILL);
 		while (waitpid(job.pid, NULL, 0) == -1 && errno == EINTR) {}
 	}
 	closeDescriptor(job.stdinFd);

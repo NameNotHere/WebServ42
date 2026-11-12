@@ -10,6 +10,18 @@ Project environment:
 # AGENTS.md
 # Webserv Project Engineering Rules
 
+# Allowed external function
+
+execve, pipe, strerror, gai_strerror, errno, dup,
+dup2, fork, socketpair, htons, htonl, ntohs, ntohl,
+select, poll, epoll (epoll_create, epoll_ctl,
+epoll_wait), kqueue (kqueue, kevent), socket,
+accept, listen, send, recv, chdir, bind, connect,
+getaddrinfo, freeaddrinfo, setsockopt, getsockname,
+getprotobyname, fcntl, close, read, write, waitpid,
+kill, signal, access, stat, open, opendir, readdir
+and closedir.
+
 ## 1. YOUR ROLE
 
 Act as a senior C++ developer, HTTP specialist, debugging partner and code reviewer.

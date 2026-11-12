@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cstdio>
 
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config)
 {
@@ -41,7 +42,7 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         sendErrorResponse(clientFd, version, keepAlive, 403, &config);
         return false;
     }
-    if (unlink(filePath.c_str()) == 0)
+    if (std::remove(filePath.c_str()) == 0)
     {
         std::ostringstream out;
         out << version << " 204 " << statusText(204) << "\r\n";

@@ -69,20 +69,7 @@ namespace
 
     bool setNonBlocking(int fd)
     {
-        int flags = fcntl(fd, F_GETFL, 0);
-        return flags != -1 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1;
-    }
-
-    void enlargeCgiInputPipe(int fd)
-    {
-#ifdef F_SETPIPE_SZ
-        const int sizes[] = { 1024 * 1024, 512 * 1024, 256 * 1024,
-                              128 * 1024, 64 * 1024 };
-        for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i)
-            if (fcntl(fd, F_SETPIPE_SZ, sizes[i]) != -1)
-                return;
-#endif
-        (void)fd;
+        return fcntl(fd, F_SETFL, O_NONBLOCK) != -1;
     }
 
     void removeClient(int fd, std::vector<pollfd>& fds,
@@ -181,7 +168,8 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
 {
     sockaddr_in clientAddr;
     pollfd client;
-    char ip[INET_ADDRSTRLEN];
+    const unsigned char* octets = reinterpret_cast<const unsigned char*>(&clientAddr.sin_addr);
+    std::ostringstream ip;
 
     socklen_t addrlen = sizeof(clientAddr);
 
@@ -197,19 +185,17 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
         std::cerr << "fcntl(O_NONBLOCK) failed for client\n";
         return;
     }
-    if (inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip)) == NULL)
-    {
-        std::cerr << "inet_ntop() failed\n";
-        close(clientFD);
-        return;
-    }
+    ip << static_cast<unsigned int>(octets[0]) << "."
+       << static_cast<unsigned int>(octets[1]) << "."
+       << static_cast<unsigned int>(octets[2]) << "."
+       << static_cast<unsigned int>(octets[3]);
 
     client.fd = clientFD;
     client.events = POLLIN;
     client.revents = 0;
     clientConfigs[clientFD] = config;
     fds.push_back(client);
-    std::cout << "Client connected from " << ip << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
+    std::cout << "Client connected from " << ip.str() << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }
 
 namespace
@@ -585,9 +571,6 @@ namespace
     {
         size_t requestLen = http.getRequestLength();
         buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
-        std::map<int, CgiJob>::iterator cgiJob = cgiJobs.find(fd);
-        if (cgiJob != cgiJobs.end() && cgiJob->second.stdinFd != -1)
-            enlargeCgiInputPipe(cgiJob->second.stdinFd);
         reqs[fd].erase(0, requestLen);
         if (cgiJobs.find(fd) == cgiJobs.end())
             largePostClients.erase(fd);

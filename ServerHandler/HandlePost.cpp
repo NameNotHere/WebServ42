@@ -131,10 +131,11 @@ int openUploadDirectory(const LocationConfig& location)
 
 int openUploadFile(int dirFd, const std::string& filename, bool& existed)
 {
+    const std::string filePath = "/proc/self/fd/"
+        + std::to_string(dirFd) + "/" + filename;
     struct stat info;
 
-    if (fstatat(dirFd, filename.c_str(), &info,
-                AT_SYMLINK_NOFOLLOW) == 0)
+    if (stat(filePath.c_str(), &info) == 0)
     {
         if (!S_ISREG(info.st_mode))
         {
@@ -152,9 +153,8 @@ int openUploadFile(int dirFd, const std::string& filename, bool& existed)
         existed = false;
     }
 
-    return openat(
-        dirFd,
-        filename.c_str(),
+    return open(
+        filePath.c_str(),
         O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW,
         0644
     );
