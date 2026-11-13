@@ -51,7 +51,9 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
     if (bestPrefix != NULL
         && isMethodAllowed(config, bestPrefix, method))
         return bestPrefix;
-    return bestExtension != NULL ? bestExtension : bestPrefix;
+    if (bestExtension != NULL)
+        return bestExtension;
+    return bestPrefix;
 }
 
 bool isPostAllowed(const ServerConfig& config, const LocationConfig& location)
@@ -106,8 +108,10 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
             endpoint.erase(endpoint.size() - 1);
 
         size_t slash = endpoint.find_last_of('/');
-        filename = slash == std::string::npos
-            ? endpoint : endpoint.substr(slash + 1);
+        if (slash == std::string::npos)
+            filename = endpoint;
+        else
+            filename = endpoint.substr(slash + 1);
     }
 
     // Only allow a single filename, not a path.
@@ -123,10 +127,11 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
 
 int openUploadDirectory(const LocationConfig& location)
 {
-    const std::string& directory =
-        location.uploadDir.empty() ? location.root : location.uploadDir;
+    const std::string* directory = &location.uploadDir;
+    if (directory->empty())
+        directory = &location.root;
 
-    return open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+    return open(directory->c_str(), O_RDONLY | O_DIRECTORY);
 }
 
 int openUploadFile(int dirFd, const std::string& filename, bool& existed)
@@ -227,7 +232,9 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
     if (!success)
         return 500;
 
-    return existed ? 200 : 201;
+    if (existed)
+        return 200;
+    return 201;
 }
 
 bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, int status)
@@ -249,9 +256,10 @@ bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, 
 
     response << version << " " << status << " " << reason << "\r\n";
     response << "Content-Length: 0\r\n";
-    response << (keepAlive
-        ? "Connection: keep-alive\r\n"
-        : "Connection: close\r\n");
+    if (keepAlive)
+        response << "Connection: keep-alive\r\n";
+    else
+        response << "Connection: close\r\n";
     response << "\r\n";
 
     std::string output = response.str();

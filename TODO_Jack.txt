@@ -1,21 +1,10 @@
-- Actually do something with the buildResponse bool.
++++++++++++++++++++++++++++++++++++++++++++++++
++*********************************************+
++***************** T0 :D0 ********************+
++*********************************************+
++++++++++++++++++++++++++++++++++++++++++++++++
 
-- Several required config features aren’t implemented: The parser only handles a limited set of directives.
-  I didn’t find support for maximum request-body size, redirects, configurable directory listing, or a configurable index file.
-  CGI is present, but its interpreter and extensions are hard-coded rather than configured per route.
-
-- Should remove ternaary operators through out the project unless we can explain them
-- Sort out error codes in server.cpp
-- be able to recreate temp.conf for eval 
-- buildResponse maybe too big
-- Possible subject conflict: Responder.cpp (ServerHandler/Responder.cpp:206) checks errno after send().
-  The subject prohibits using errno to adjust behavior after read/write operations and also names send as a write operation.
-- REMOVE AGENTS.md before eval
+- ur mum
+- be able to recreate temp.conf for eval maybe
+- REMOVE AGENTS.md, evaluationp_Pdf and subject_pdf before eval
 - Check all files again for any weird shit
-
-
-ERROR CODES
-
-- 405 Method Not Allowed means the server recognizes the method, but this resource doesn’t allow it. For example, the server supports POST, but /images/logo.png only allows GET.
-  501 Not Implemented means the server doesn’t recognize or implement the method at all. In your project, methods outside GET, POST, and DELETE should get 501.
-  One HTTP detail: a 405 response should include an Allow header listing the methods accepted for that resource.

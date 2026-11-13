@@ -30,7 +30,143 @@ namespace
         ClientOutput() : closeWhenDrained(false) {}
     };
 
+    enum OutputFlushStep
+    {
+        OUTPUT_FLUSH_ERROR,
+        OUTPUT_FLUSH_CONTINUE,
+        OUTPUT_FLUSH_PAUSE
+    };
+
     std::map<int, ClientOutput> clientOutputs;
+
+    bool loadFileChunk(OutputSegment& segment)
+    {
+        if (!segment.isFile || segment.offset != segment.bytes.size()
+            || segment.fileRemaining <= 0)
+            return true;
+
+        char buffer[16384];
+        size_t amount = sizeof(buffer);
+        if (segment.fileRemaining < static_cast<off_t>(amount))
+            amount = static_cast<size_t>(segment.fileRemaining);
+
+        ssize_t bytesRead = read(segment.fileFd, buffer, amount);
+        if (bytesRead <= 0)
+            return false;
+
+        segment.bytes.assign(buffer, static_cast<size_t>(bytesRead));
+        segment.offset = 0;
+        segment.fileRemaining -= bytesRead;
+        return true;
+    }
+
+    bool getCoalescedBatchSize(const ClientOutput& output,
+                               size_t& batchSize, size_t& batchCount)
+    {
+        batchSize = 0;
+        batchCount = 0;
+
+        for (std::deque<OutputSegment>::const_iterator it =
+                 output.segments.begin();
+             it != output.segments.end() && !it->isFile; ++it)
+        {
+            size_t available = it->bytes.size() - it->offset;
+            if (available > MAX_COALESCED_OUTPUT - batchSize)
+            {
+                batchSize = 0;
+                batchCount = 0;
+                return false;
+            }
+            batchSize += available;
+            ++batchCount;
+        }
+        return true;
+    }
+
+    std::string makeCoalescedBatch(const ClientOutput& output,
+                                   size_t batchSize)
+    {
+        std::string batch;
+        batch.reserve(batchSize);
+        for (std::deque<OutputSegment>::const_iterator it =
+                 output.segments.begin();
+             it != output.segments.end() && !it->isFile; ++it)
+            batch.append(it->bytes, it->offset, it->bytes.size() - it->offset);
+        return batch;
+    }
+
+    void consumeCoalescedBytes(ClientOutput& output, size_t sentBytes)
+    {
+        while (sentBytes > 0 && !output.segments.empty())
+        {
+            OutputSegment& segment = output.segments.front();
+            size_t available = segment.bytes.size() - segment.offset;
+            if (sentBytes >= available)
+            {
+                sentBytes -= available;
+                output.segments.pop_front();
+            }
+            else
+            {
+                segment.offset += sentBytes;
+                sentBytes = 0;
+            }
+        }
+    }
+
+    OutputFlushStep sendCoalescedBatch(int clientFd, ClientOutput& output,
+                                       size_t batchSize)
+    {
+        std::string batch = makeCoalescedBatch(output, batchSize);
+        ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
+        if (sent < 0)
+            return OUTPUT_FLUSH_PAUSE;
+        if (sent == 0)
+            return OUTPUT_FLUSH_ERROR;
+
+        consumeCoalescedBytes(output, static_cast<size_t>(sent));
+        return OUTPUT_FLUSH_PAUSE;
+    }
+
+    OutputFlushStep sendFrontSegment(int clientFd, ClientOutput& output)
+    {
+        OutputSegment& segment = output.segments.front();
+        ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
+                            segment.bytes.size() - segment.offset, 0);
+        if (sent < 0)
+            return OUTPUT_FLUSH_PAUSE;
+        if (sent == 0)
+            return OUTPUT_FLUSH_ERROR;
+
+        segment.offset += static_cast<size_t>(sent);
+        if (segment.offset < segment.bytes.size())
+            return OUTPUT_FLUSH_PAUSE;
+
+        if (segment.isFile)
+        {
+            if (segment.fileRemaining == 0)
+            {
+                if (segment.fileFd != -1)
+                    close(segment.fileFd);
+                output.segments.pop_front();
+            }
+            return OUTPUT_FLUSH_CONTINUE;
+        }
+
+        output.segments.pop_front();
+        return OUTPUT_FLUSH_PAUSE;
+    }
+
+    void removeEmptyFrontSegment(ClientOutput& output)
+    {
+        OutputSegment& segment = output.segments.front();
+        if (!segment.isFile || segment.fileRemaining == 0)
+        {
+            if (segment.isFile && segment.fileFd != -1)
+                close(segment.fileFd);
+            output.segments.pop_front();
+        }
+    }
 
     bool targetHasExtension(const std::string& target,
                             const std::string& extension)
@@ -64,7 +200,7 @@ std::string statusText(int code)
         case 405: return "Method Not Allowed";
         case 413: return "Content Too Large";
         case 500: return "Internal Server Error";
-        case 501: return "Not Implemented";
+        case 501: return "Method Not Implemented";
         case 505: return "HTTP Version Not Supported";
         default: return "";
     }
@@ -158,19 +294,8 @@ bool flushPendingOutput(int clientFd)
     while (!output->second.segments.empty())
     {
         OutputSegment& segment = output->second.segments.front();
-        if (segment.isFile && segment.offset == segment.bytes.size()
-            && segment.fileRemaining > 0)
-        {
-            char buffer[16384];
-            size_t amount = segment.fileRemaining > static_cast<off_t>(sizeof(buffer))
-                ? sizeof(buffer) : static_cast<size_t>(segment.fileRemaining);
-            ssize_t bytesRead = read(segment.fileFd, buffer, amount);
-            if (bytesRead <= 0)
-                return false;
-            segment.bytes.assign(buffer, static_cast<size_t>(bytesRead));
-            segment.offset = 0;
-            segment.fileRemaining -= bytesRead;
-        }
+        if (!loadFileChunk(segment))
+            return false;
 
         if (segment.offset < segment.bytes.size())
         {
@@ -178,88 +303,24 @@ bool flushPendingOutput(int clientFd)
             {
                 size_t batchSize = 0;
                 size_t batchCount = 0;
-                for (std::deque<OutputSegment>::const_iterator it =
-                         output->second.segments.begin();
-                     it != output->second.segments.end() && !it->isFile; ++it)
-                {
-                    size_t available = it->bytes.size() - it->offset;
-                    if (available > MAX_COALESCED_OUTPUT - batchSize)
-                    {
-                        batchCount = 0;
-                        break;
-                    }
-                    batchSize += available;
-                    ++batchCount;
-                }
-
+                getCoalescedBatchSize(output->second, batchSize, batchCount);
                 if (batchCount > 1)
                 {
-                    std::string batch;
-                    batch.reserve(batchSize);
-                    for (std::deque<OutputSegment>::const_iterator it =
-                             output->second.segments.begin();
-                         it != output->second.segments.end() && !it->isFile;
-                         ++it)
-                        batch.append(it->bytes, it->offset,
-                                     it->bytes.size() - it->offset);
-
-                    ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
-                    if (sent < 0)
-                        return true;
-                    if (sent == 0)
-                        return false;
-
-                    size_t remaining = static_cast<size_t>(sent);
-                    while (remaining > 0 && !output->second.segments.empty())
-                    {
-                        OutputSegment& pending = output->second.segments.front();
-                        size_t available = pending.bytes.size() - pending.offset;
-                        if (remaining >= available)
-                        {
-                            remaining -= available;
-                            output->second.segments.pop_front();
-                        }
-                        else
-                        {
-                            pending.offset += remaining;
-                            remaining = 0;
-                        }
-                    }
-                    return true;
+                    OutputFlushStep step = sendCoalescedBatch(
+                        clientFd, output->second, batchSize);
+                    return step != OUTPUT_FLUSH_ERROR;
                 }
             }
 
-            ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
-                                segment.bytes.size() - segment.offset, 0);
-            if (sent < 0)
-                return true;
-            if (sent == 0)
+            OutputFlushStep step = sendFrontSegment(clientFd, output->second);
+            if (step == OUTPUT_FLUSH_ERROR)
                 return false;
-            segment.offset += static_cast<size_t>(sent);
-            if (segment.offset < segment.bytes.size())
+            if (step == OUTPUT_FLUSH_PAUSE)
                 return true;
-
-            if (segment.isFile)
-            {
-                if (segment.fileRemaining == 0)
-                {
-                    if (segment.fileFd != -1)
-                        close(segment.fileFd);
-                    output->second.segments.pop_front();
-                }
-                continue;
-            }
-
-            output->second.segments.pop_front();
-            return true;
+            continue;
         }
 
-        if (!segment.isFile || segment.fileRemaining == 0)
-        {
-            if (segment.isFile && segment.fileFd != -1)
-                close(segment.fileFd);
-            output->second.segments.pop_front();
-        }
+        removeEmptyFrontSegment(output->second);
     }
     return true;
 }
@@ -281,7 +342,9 @@ std::string normalizeTarget(const std::string& rawTarget)
 
 std::string resolveRequestedPath(const std::string& root, const std::string& target)
 {
-    std::string baseRoot = root.empty() ? "." : root;
+    std::string baseRoot = root;
+    if (baseRoot.empty())
+        baseRoot = ".";
     if (!baseRoot.empty() && baseRoot.back() == '/')
         baseRoot.pop_back();
 
@@ -326,9 +389,10 @@ bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result,
         response << it->first << ": " << it->second << "\r\n";
     }
     response << "Content-Length: " << parsed.body.size() << "\r\n";
-    response << (job.keepAlive
-        ? "Connection: keep-alive\r\n"
-        : "Connection: close\r\n");
+    if (job.keepAlive)
+        response << "Connection: keep-alive\r\n";
+    else
+        response << "Connection: close\r\n";
     response << "\r\n";
 
     ClientOutput& output = clientOutputs[clientFd];
@@ -345,52 +409,57 @@ std::string toUpper(std::string value)
     return value;
 }
 
-bool buildResponse(HttpParser& http, int clientFd,
-                   bool& keepAlive, const ServerConfig& config,
-                   CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs)
+namespace
 {
-    std::string version = http.getVersion();
-    std::string connection =
-        toLower(findHeaderValue(http.getHeaders(), "connection"));
-    if (connection == "close")
-        keepAlive = false;
-    else if (connection == "keep-alive")
-        keepAlive = true;
-    else
-        keepAlive = (version == "HTTP/1.1");
+    void setKeepAlive(const HttpParser& http, bool& keepAlive)
+    {
+        std::string version = http.getVersion();
+        std::string connection =
+            toLower(findHeaderValue(http.getHeaders(), "connection"));
+        if (connection == "close")
+            keepAlive = false;
+        else if (connection == "keep-alive")
+            keepAlive = true;
+        else
+            keepAlive = (version == "HTTP/1.1");
+    }
 
-    const LocationConfig* location =
-        findMatchingLocation(config, http.getTarget(), toUpper(http.getMethod()));
-    if (location != NULL && location->redirectCode != 0)
+    bool sendRedirectResponse(const HttpParser& http, int clientFd,
+                             bool keepAlive, const LocationConfig& location)
     {
         std::ostringstream response;
-        response << version << " " << location->redirectCode << " "
-                 << statusText(location->redirectCode) << "\r\n"
-                 << "Location: " << location->redirectTarget << "\r\n"
-                 << "Content-Length: 0\r\n"
-                 << (keepAlive ? "Connection: keep-alive\r\n"
-                               : "Connection: close\r\n")
-                 << "\r\n";
+        response << http.getVersion() << " " << location.redirectCode << " "
+                 << statusText(location.redirectCode) << "\r\n"
+                 << "Location: " << location.redirectTarget << "\r\n"
+                 << "Content-Length: 0\r\n";
+        if (keepAlive)
+            response << "Connection: keep-alive\r\n";
+        else
+            response << "Connection: close\r\n";
+        response << "\r\n";
+
         const std::string message = response.str();
         return sendAll(clientFd, message.data(), message.size()) != -1;
     }
 
-    const bool configuredCgi = location != NULL
-        && location->path.compare(0, 2, "*.") == 0
-        && !location->cgi_path.empty()
-        && targetHasExtension(http.getTarget(), location->path.substr(1));
-
-    if (configuredCgi || cgi.isCGI(http.getTarget()))
+    bool isConfiguredCgiRoute(const LocationConfig* location,
+                              const std::string& target)
     {
-        if (configuredCgi
-            && !isMethodAllowed(config, location, toUpper(http.getMethod())))
-            return sendErrorResponse(
-                clientFd, version, keepAlive, 405, &config,
-                std::vector<std::pair<std::string, std::string> >(1,
-                    std::make_pair("Allow", allowHeaderValue(config, location))));
+        if (location == NULL)
+            return false;
+        if (location->path.compare(0, 2, "*.") != 0)
+            return false;
+        if (location->cgi_path.empty())
+            return false;
+        return targetHasExtension(target, location->path.substr(1));
+    }
 
+    CGIRequest makeCgiRequest(HttpParser& http, const ServerConfig& config,
+                              const LocationConfig* location,
+                              bool configuredCgi,
+                              const std::string& version)
+    {
         CGIRequest request;
-
         std::string target = http.getTarget();
         size_t queryPosition = target.find('?');
         std::string scriptUri = target;
@@ -410,6 +479,7 @@ bool buildResponse(HttpParser& http, int clientFd,
         const std::string* root = &config.root;
         if (configuredCgi && !location->root.empty())
             root = &location->root;
+
         std::string scriptPathUri = scriptUri;
         if (configuredCgi)
         {
@@ -427,17 +497,39 @@ bool buildResponse(HttpParser& http, int clientFd,
 
         request.body = http.takeBody();
         request.headers = http.getHeaders();
-
         request.server_protocol = version;
         request.server_name = findHeaderValue(http.getHeaders(), "host");
         request.server_software = "webserv/1.0";
         request.server_port = http.getPortNum();
+        return request;
+    }
 
+    bool startCgiResponse(HttpParser& http, int clientFd, bool keepAlive,
+                          const ServerConfig& config, CgiHandler& cgi,
+                          std::map<int, CgiJob>& cgiJobs,
+                          const LocationConfig* location,
+                          bool configuredCgi, const std::string& version)
+    {
+        if (configuredCgi
+            && !isMethodAllowed(config, location, toUpper(http.getMethod())))
+        {
+            std::vector<std::pair<std::string, std::string> > extraHeaders;
+            extraHeaders.push_back(std::make_pair(
+                "Allow", allowHeaderValue(config, location)));
+            return sendErrorResponse(clientFd, version, keepAlive, 405,
+                                     &config, extraHeaders);
+        }
+
+        CGIRequest request = makeCgiRequest(
+            http, config, location, configuredCgi, version);
         CgiJob job;
-        const unsigned int timeoutSeconds = request.body.size() >= 8 * 1024 * 1024
-            ? 30 : 5;
+        unsigned int timeoutSeconds = 5;
+        if (request.body.size() >= 8 * 1024 * 1024)
+            timeoutSeconds = 30;
         if (!cgi.start(request, job, timeoutSeconds))
-            return sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            return sendErrorResponse(clientFd, version, keepAlive, 500,
+                                     &config);
+
         job.clientFd = clientFd;
         job.httpVersion = version;
         job.keepAlive = keepAlive;
@@ -445,14 +537,48 @@ bool buildResponse(HttpParser& http, int clientFd,
         return true;
     }
 
-    if (toLower(http.getMethod()) == "get")
-        return handleGet(http, version, keepAlive, clientFd, config);
+    bool dispatchResponse(HttpParser& http, int clientFd, bool keepAlive,
+                          const ServerConfig& config)
+    {
+        std::string method = toLower(http.getMethod());
+        if (method == "get")
+        {
+            handleGet(http, http.getVersion(), keepAlive, clientFd, config);
+            return true;
+        }
+        if (method == "post")
+        {
+            handlePost(http, http.getVersion(), keepAlive, clientFd, config);
+            return true;
+        }
+        if (method == "delete")
+        {
+            handleDelete(clientFd, http.getVersion(), keepAlive,
+                         http.getTarget(), config);
+            return true;
+        }
+        return false;
+    }
+}
 
-    else if (toLower(http.getMethod()) == "post")
-        return handlePost(http, version, keepAlive, clientFd, config);
+bool buildResponse(HttpParser& http, int clientFd,
+                   bool& keepAlive, const ServerConfig& config,
+                   CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs)
+{
+    std::string version = http.getVersion();
+    setKeepAlive(http, keepAlive);
 
-    else if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive, http.getTarget(), config);
+    const LocationConfig* location =
+        findMatchingLocation(config, http.getTarget(), toUpper(http.getMethod()));
+    if (location != NULL && location->redirectCode != 0)
+        return sendRedirectResponse(http, clientFd, keepAlive, *location);
 
-    return false;
+    bool configuredCgi =
+        isConfiguredCgiRoute(location, http.getTarget());
+
+    if (configuredCgi || cgi.isCGI(http.getTarget()))
+        return startCgiResponse(http, clientFd, keepAlive, config, cgi,
+                                cgiJobs, location, configuredCgi, version);
+
+    return dispatchResponse(http, clientFd, keepAlive, config);
 }

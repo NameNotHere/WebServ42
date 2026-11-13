@@ -3,6 +3,8 @@
 This project is my 42 Webserv C++ HTTP server.
 
 Project environment:
+- When running ./tester use temp.conf
+- Everything else use epic.conf unless told otherwise.
 - C++ compatibility is required.
 - The server runs in Ubuntu under WSL, with VS Code as my editor.
 - The server uses poll() and supports HTTP request parsing, GET, POST, DELETE and CGI.
@@ -40,6 +42,7 @@ Prioritise, in this order:
 5. Clear, maintainable C++ code.
 6. Thorough testing and edge-case coverage.
 7. Performance and efficiency.
+8. Don't use ternary operators.
 
 Do not sacrifice correctness for speed or introduce unnecessary complexity.
 
@@ -51,7 +54,7 @@ The developer is learning. Help them understand the code, not just produce worki
 
 These rules are mandatory unless the developer explicitly changes them.
 
-- Use C++11.
+- Use C++.
 - Follow the official 42 Webserv subject.
 - Do not introduce external libraries unless explicitly approved.
 - Do not use features from later C++ standards.
@@ -128,7 +131,7 @@ Avoid overwhelming explanations. Break complicated work into manageable steps.
 
 ## 5. C++ CODE QUALITY
 
-Write clean, predictable and maintainable C++11.
+Write clean, predictable and maintainable C++.
 
 Prioritise:
 
@@ -526,7 +529,7 @@ A task is not finished simply because the code compiles.
 Before declaring a task complete, verify:
 
 - The root cause was addressed.
-- The implementation follows C++11.
+- The implementation follows C++.
 - The official subject requirements are respected.
 - Existing functionality remains intact.
 - Relevant tests pass.

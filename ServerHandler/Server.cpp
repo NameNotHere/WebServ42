@@ -449,9 +449,10 @@ namespace
             CGIResult result = cgi.result(job->second);
             std::map<int, ServerConfig>::const_iterator config =
                 clientConfigs.find(clientFd);
-            queueCgiResponse(clientFd, job->second, result,
-                             config == clientConfigs.end() ? NULL
-                                                           : &config->second);
+            const ServerConfig* serverConfig = NULL;
+            if (config != clientConfigs.end())
+                serverConfig = &config->second;
+            queueCgiResponse(clientFd, job->second, result, serverConfig);
             bool keepAlive = job->second.keepAlive;
             cgi.cancel(job->second);
             cgiJobs.erase(job);
@@ -491,8 +492,10 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         appendClientPollSources(hosting, fds, pollFds, sources);
         appendCgiPollSources(cgiJobs, pollFds, sources);
 
-        int ready = poll(pollFds.data(), pollFds.size(),
-                         cgiJobs.empty() ? -1 : 100);
+        int timeout = 100;
+        if (cgiJobs.empty())
+            timeout = -1;
+        int ready = poll(pollFds.data(), pollFds.size(), timeout);
         if (ready == -1)
         {
             std::cerr << "poll() failed\n";
@@ -525,9 +528,10 @@ namespace
             {
                 std::map<int, ServerConfig>::iterator config =
                     clientConfigs.find(fd);
-                sendErrorResponse(fd, "HTTP/1.1", false, 400,
-                                  config == clientConfigs.end() ? NULL
-                                                                : &config->second);
+                const ServerConfig* serverConfig = NULL;
+                if (config != clientConfigs.end())
+                    serverConfig = &config->second;
+                sendErrorResponse(fd, "HTTP/1.1", false, 400, serverConfig);
                 closeAfterPendingOutput(fd);
                 reqs.erase(fd);
                 clientConfigs.erase(fd);
@@ -543,9 +547,9 @@ namespace
     {
         size_t maxBody = 0;
         size_t firstSpace = rawRequest.find(' ');
-        size_t secondSpace = firstSpace == std::string::npos
-            ? std::string::npos
-            : rawRequest.find(' ', firstSpace + 1);
+        size_t secondSpace = std::string::npos;
+        if (firstSpace != std::string::npos)
+            secondSpace = rawRequest.find(' ', firstSpace + 1);
 
         if (firstSpace != std::string::npos
             && secondSpace != std::string::npos)
@@ -570,15 +574,23 @@ namespace
         std::map<int, CgiJob>& cgiJobs)
     {
         size_t requestLen = http.getRequestLength();
-        buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
+        bool responseBuilt = buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
         reqs[fd].erase(0, requestLen);
         if (cgiJobs.find(fd) == cgiJobs.end())
             largePostClients.erase(fd);
+
         largePostWaiters.erase(fd);
         if (cgiJobs.find(fd) != cgiJobs.end())
         {
             if (reqs[fd].empty())
                 std::string().swap(reqs[fd]);
+            return false;
+        }
+        if (!responseBuilt)
+        {
+            closeAfterPendingOutput(fd);
+            reqs.erase(fd);
+            clientConfigs.erase(fd);
             return false;
         }
         if (!keepAlive)
@@ -598,8 +610,7 @@ namespace
     {
         int code = 400;
         if (status == HttpParser::REQUEST_METHOD_NOT_ALLOWED) code = 405;
-        // else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
-        else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 405;
+        else if (status == HttpParser::REQUEST_METHOD_NOT_IMPLEMENTED) code = 501;
         else if (status == HttpParser::REQUEST_TARGET_NOT_FOUND) code = 404;
         else if (status == HttpParser::REQUEST_VERSION_NOT_SUPPORTED) code = 505;
         else if (status == HttpParser::REQUEST_CONTENT_TOO_LARGE) code = 413;
@@ -611,9 +622,10 @@ namespace
             extraHeaders.push_back(std::make_pair(
                 "Allow", allowHeaderValue(config->second, NULL)));
         }
-        sendErrorResponse(fd, "HTTP/1.1", false, code,
-                          config == clientConfigs.end() ? NULL
-                                                        : &config->second,
+        const ServerConfig* serverConfig = NULL;
+        if (config != clientConfigs.end())
+            serverConfig = &config->second;
+        sendErrorResponse(fd, "HTTP/1.1", false, code, serverConfig,
                           extraHeaders);
         closeAfterPendingOutput(fd);
         reqs.erase(fd);
@@ -638,12 +650,10 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,
         }
 
         size_t maxBody = requestMaxBody(fd, reqs[fd], clientConfigs);
-        HttpParser::RequestStatus status =
-            http.parseHttpRequest(reqs[fd], maxBody);
+        HttpParser::RequestStatus status = http.parseHttpRequest(reqs[fd], maxBody);
         if (status == HttpParser::REQUEST_VALID)
         {
-            if (!processValidRequest(fd, http, keepAlive, reqs,
-                                     clientConfigs, cgi, cgiJobs))
+            if (!processValidRequest(fd, http, keepAlive, reqs, clientConfigs, cgi, cgiJobs))
                 return;
             continue;
         }

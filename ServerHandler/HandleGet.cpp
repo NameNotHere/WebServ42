@@ -100,10 +100,9 @@ namespace
                                const LocationConfig* location,
                                const ServerConfig& config)
     {
-        const std::string& root =
-            (location != NULL && !location->root.empty())
-                ? location->root
-                : config.root;
+        const std::string* root = &config.root;
+        if (location != NULL && !location->root.empty())
+            root = &location->root;
 
         std::string relativeTarget = decodedTarget;
         if (location != NULL && location->path.compare(0, 2, "*.") != 0)
@@ -115,7 +114,9 @@ namespace
                 relativeTarget.insert(0, "/");
         }
 
-        std::string path = root.empty() ? "." : root;
+        std::string path = *root;
+        if (path.empty())
+            path = ".";
         if (!path.empty() && path[path.size() - 1] == '/')
             path.erase(path.size() - 1);
         path += relativeTarget;
@@ -133,8 +134,10 @@ namespace
             sendErrorResponse(clientFd, version, keepAlive, 500, &config);
             return false;
         }
-        header += keepAlive ? "Connection: keep-alive\r\n\r\n"
-                            : "Connection: close\r\n\r\n";
+        if (keepAlive)
+            header += "Connection: keep-alive\r\n\r\n";
+        else
+            header += "Connection: close\r\n\r\n";
         sendAll(clientFd, header.data(), header.size());
         sendAll(clientFd, body.data(), body.size());
         return true;
@@ -155,8 +158,10 @@ namespace
         response << version << " 200 " << statusText(200) << "\r\n";
         response << "Content-Length: " << info.st_size << "\r\n";
         response << "Content-Type: " << GetEnding(path) << "\r\n";
-        response << (keepAlive ? "Connection: keep-alive\r\n"
-                               : "Connection: close\r\n");
+        if (keepAlive)
+            response << "Connection: keep-alive\r\n";
+        else
+            response << "Connection: close\r\n";
         response << "\r\n";
 
         const std::string header = response.str();

@@ -26,7 +26,10 @@ std::string makeErrorResponse(int code, const std::string& version, bool keepAli
     out << "Content-Type: text/html\r\n";
     for (size_t i = 0; i < extraHeaders.size(); ++i)
         out << extraHeaders[i].first << ": " << extraHeaders[i].second << "\r\n";
-    out << (keepAlive ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
+    if (keepAlive)
+        out << "Connection: keep-alive\r\n";
+    else
+        out << "Connection: close\r\n";
     out << "\r\n";
     out << body;
     return out.str();

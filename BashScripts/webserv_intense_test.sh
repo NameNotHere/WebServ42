@@ -277,9 +277,9 @@ line; printf '  %sHTTP PARSER AND REQUEST VALIDATION%s\n' "$BOLD$CYAN" "$RESET";
 request GET '/index.html' $'Connection: close\r\n' ''
 run_test 'Valid HTTP/1.1 request line' 200 "$REQUEST" 'Valid requests should reach the GET handler.'
 request BREW / $'Connection: close\r\n' ''
-run_test 'Unknown method token' 405 "$REQUEST" 'Unknown methods should return 405.'
+run_test 'Unknown method token' 501 "$REQUEST" 'Unknown methods should return 501.'
 request HEAD / $'Connection: close\r\n' ''
-run_test 'HEAD method token is not implemented' 405 "$REQUEST" 'This implementation supports GET, POST, and DELETE only.'
+run_test 'HEAD method is not allowed' 405 "$REQUEST" 'HEAD is recognized but is not allowed by the GET-only route.'
 request GET / $'Connection: close\r\n' ''
 REQUEST="${REQUEST/HTTP\/1.1/HTTP\/1.0}"
 run_test 'Unsupported HTTP/1.0 version' 505 "$REQUEST" 'A syntactically valid but unsupported HTTP/1.x version should return 505.'
@@ -378,7 +378,7 @@ check_file 'Multi-chunk upload bytes are preserved' "$UPLOAD_DIR/$ID-multichunk.
 run_event_test 'Second client responds during a large static GET' slow_get 'A slow static-file client must not block the event loop from serving another client.'
 run_event_test 'Partial POST disconnect leaves no upload behind' partial_post 'An incomplete request body must not create a partial upload, and the server must remain responsive.'
 
-# DELETE: epic.conf does not allow DELETE, so 405 is the configured expectation.
+# DELETE
 line; printf '  %sDELETE%s\n' "$BOLD$CYAN" "$RESET"; line
 printf 'delete fixture\n' > "$WWW_DIR/$ID-delete.txt"
 request DELETE "/$ID-delete.txt" $'Connection: close\r\n'

@@ -116,8 +116,12 @@ namespace
 	[[noreturn]] void terminateCgiChild(int status,
 		std::vector<char*>& envp)
 	{
-		char* command = const_cast<char*>(status == 1 ? "exit 1"
-			: status == 126 ? "exit 126" : "exit 127");
+	const char* commandText = "exit 127";
+	if (status == 1)
+		commandText = "exit 1";
+	else if (status == 126)
+		commandText = "exit 126";
+	char* command = const_cast<char*>(commandText);
 		char* shellArgv[4];
 		shellArgv[0] = const_cast<char*>("/bin/sh");
 		shellArgv[1] = const_cast<char*>("-c");
@@ -262,7 +266,10 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 		for (size_t i = 0; i < key.size(); ++i)
 		{
 			unsigned char c = static_cast<unsigned char>(key[i]);
-			key[i] = c == '-' ? '_' : static_cast<char>(std::toupper(c));
+			if (c == '-')
+				key[i] = '_';
+			else
+				key[i] = static_cast<char>(std::toupper(c));
 		}
 		env[key] = it->second;
 	}
@@ -290,8 +297,9 @@ bool CgiHandler::start(CGIRequest& request, CgiJob& job,
 	std::vector<char*> envp;
 	buildEnvironmentPointers(environment, envStrings, envp);
 	std::string argument = scriptArgument(request.script_path);
-	std::string interpreter = request.interpreter.empty()
-		? _interpreter : request.interpreter;
+	std::string interpreter = _interpreter;
+	if (!request.interpreter.empty())
+		interpreter = request.interpreter;
 	if (!interpreter.empty() && interpreter[0] != '/')
 		interpreter = std::filesystem::absolute(interpreter).string();
 
@@ -365,9 +373,10 @@ void CgiHandler::readOutput(CgiJob& job) const
 void CgiHandler::pipeError(CgiJob& job, bool inputPipe) const
 {
 	job.ioError = true;
-	job.errorMessage = inputPipe
-		? "CGI stdin pipe reported an error"
-		: "CGI stdout pipe reported an error";
+	if (inputPipe)
+		job.errorMessage = "CGI stdin pipe reported an error";
+	else
+		job.errorMessage = "CGI stdout pipe reported an error";
 	if (inputPipe)
 		closeDescriptor(job.stdinFd);
 	else

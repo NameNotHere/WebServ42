@@ -6,7 +6,9 @@ int main(int argc, char** argv)
 {
     CGIRequest req;
     req.method         = "POST";
-    req.script_path    = argc > 1 ? argv[1] : "./test.py";
+    req.script_path = "./test.py";
+    if (argc > 1)
+        req.script_path = argv[1];
     req.script_name    = "/cgi-bin/test.py";
     req.path_info      = "";
     req.query_string   = "name=Bob";
@@ -23,16 +25,25 @@ int main(int argc, char** argv)
     req.headers["content-length"] = std::to_string(req.body.size());
     req.headers["user-agent"]     = "test";
 
-    unsigned int timeout = argc > 3
-        ? static_cast<unsigned int>(std::atoi(argv[3])) : 5;
+    unsigned int timeout = 5;
+    if (argc > 3)
+        timeout = static_cast<unsigned int>(std::atoi(argv[3]));
     if (argc > 4)
         req.query_string = argv[4];
     CgiHandler handler("/usr/bin/python3", timeout);
     CGIResult  result = handler.execute(req);
 
     std::cout << "exit=" << result.exit_status << "\n";
-    std::cout << "timed_out=" << (result.timed_out ? "yes" : "no") << "\n";
-    std::cout << "io_error=" << (result.io_error ? "yes" : "no") << "\n";
+    std::cout << "timed_out=";
+    if (result.timed_out)
+        std::cout << "yes\n";
+    else
+        std::cout << "no\n";
+    std::cout << "io_error=";
+    if (result.io_error)
+        std::cout << "yes\n";
+    else
+        std::cout << "no\n";
     if (!result.error_message.empty())
         std::cout << "error=" << result.error_message << "\n";
     std::cout << "---raw---\n" << result.raw_output << "\n";

@@ -38,6 +38,9 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 	std::string lowerMethod = method;
 	lowerCase(lowerMethod);
 
+	if (lowerMethod == "head")
+		return REQUEST_METHOD_NOT_ALLOWED;
+
 	if (lowerMethod != "get"    &&
 		lowerMethod != "post"   &&
 		lowerMethod != "delete"  )

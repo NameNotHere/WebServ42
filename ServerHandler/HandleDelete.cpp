@@ -47,7 +47,10 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         std::ostringstream out;
         out << version << " 204 " << statusText(204) << "\r\n";
         out << "Content-Length: 0\r\n";
-        out << (keepAlive ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
+        if (keepAlive)
+            out << "Connection: keep-alive\r\n";
+        else
+            out << "Connection: close\r\n";
         out << "\r\n";
         std::string resp = out.str();
         sendAll(clientFd, resp.data(), resp.size());
