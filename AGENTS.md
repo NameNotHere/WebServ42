@@ -1,5 +1,7 @@
 # AGENTS.md
 
+I know the subect_pdf.txt say c++98 only but we are allowed to use any c++ so stop bringing it up!
+
 This project is my 42 Webserv C++ HTTP server.
 
 Project environment:
