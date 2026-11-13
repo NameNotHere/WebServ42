@@ -12,6 +12,7 @@ UPLOAD_DIR="${UPLOAD_DIR:-$ROOT_DIR/uploads}"
 TMP="$(mktemp -d)"
 ID="webserv_intense_$$"
 PASS=0; FAIL=0; SKIP=0; TOTAL=0
+INTERFACE_SERVER_PID=""
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RED=$'\033[31m'; GREEN=$'\033[32m'; CYAN=$'\033[36m'; MAGENTA=$'\033[35m'; YELLOW=$'\033[33m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
@@ -20,6 +21,11 @@ else
 fi
 
 cleanup() {
+  if [[ -n "$INTERFACE_SERVER_PID" ]]; then
+    kill "$INTERFACE_SERVER_PID" 2>/dev/null || true
+    wait "$INTERFACE_SERVER_PID" 2>/dev/null || true
+    INTERFACE_SERVER_PID=""
+  fi
   rm -f "$WWW_DIR/$ID-get.txt" "$WWW_DIR/$ID-delete.txt" \
         "$UPLOAD_DIR/$ID-post.txt" "$UPLOAD_DIR/$ID-empty.txt" \
         "$UPLOAD_DIR/$ID-overwrite.txt" "$UPLOAD_DIR/$ID-chunked.txt" \
@@ -259,6 +265,207 @@ check_absent() {
     printf '  ACTUAL  : file still exists\n  RESULT: %s✗ FAIL%s\n  REASON: A successful DELETE must remove the target file.\n' "$RED" "$RESET"; FAIL=$((FAIL + 1))
   fi
 }
+
+run_interface_binding_test() {
+  local bind_port config_file attempt loopback_status other_interface_status
+  TOTAL=$((TOTAL + 1)); printf '\n'; line
+  printf '  %sTEST %02d: IPv4 listener binds only to its configured interface%s\n' \
+    "$BOLD$MAGENTA" "$TOTAL" "$RESET"; line
+  printf '  EXPECTED: %s127.0.0.1 accepts GET; 127.0.0.2 cannot connect%s\n' \
+    "$YELLOW" "$RESET"
+
+  bind_port="$(python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+  config_file="$TMP/interface-binding.conf"
+  cat > "$config_file" <<EOF
+server {
+    listen 127.0.0.1:$bind_port;
+    root $WWW_DIR;
+    location / {
+        root $WWW_DIR;
+        allowed_methods GET;
+    }
+}
+EOF
+
+  "$ROOT_DIR/webserv" "$config_file" > "$TMP/interface-binding.log" 2>&1 &
+  INTERFACE_SERVER_PID=$!
+  loopback_status=0
+  for attempt in {1..30}; do
+    if python3 - "$bind_port" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.5)
+s.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+response = s.recv(1024)
+s.close()
+raise SystemExit(0 if response.startswith(b"HTTP/1.1 200") else 1)
+PY
+    then
+      loopback_status=1
+      break
+    fi
+    sleep 0.1
+  done
+
+  other_interface_status=1
+  if (( loopback_status )); then
+    if python3 - "$bind_port" <<'PY' >/dev/null 2>&1
+import socket, sys
+try:
+    s = socket.create_connection(("127.0.0.2", int(sys.argv[1])), timeout=0.5)
+except OSError:
+    raise SystemExit(0)
+s.close()
+raise SystemExit(1)
+PY
+    then
+      other_interface_status=0
+    fi
+  fi
+
+  kill "$INTERFACE_SERVER_PID" 2>/dev/null || true
+  wait "$INTERFACE_SERVER_PID" 2>/dev/null || true
+  INTERFACE_SERVER_PID=""
+
+  if (( loopback_status && ! other_interface_status )); then
+    printf '  ACTUAL  : 127.0.0.1:%s served GET; 127.0.0.2 could not connect\n' \
+      "$bind_port"
+    printf '  RESULT  : %s✓ PASS%s\n' "$GREEN" "$RESET"
+    PASS=$((PASS + 1))
+  else
+    printf '  ACTUAL  : loopback GET succeeded=%s; other-interface connection refused=%s\n' \
+      "$loopback_status" "$((1 - other_interface_status))"
+    if [[ -f "$TMP/interface-binding.log" ]]; then
+      sed -n '1,12p' "$TMP/interface-binding.log"
+    fi
+    printf '  RESULT  : %s✗ FAIL%s\n' "$RED" "$RESET"
+    printf '  REASON  : The configured IPv4 address must control which interface accepts connections.\n'
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+run_config_directive_test() {
+  local HOST=127.0.0.1 PORT site_dir upload_dir config_file attempt server_ready
+  local upload_path oversized_path
+  site_dir="$TMP/config-directive-site"
+  upload_dir="$TMP/config-directive-uploads"
+  config_file="$TMP/config-directives.conf"
+  mkdir -p "$site_dir" "$upload_dir"
+  printf 'custom index fixture\n' > "$site_dir/home.html"
+  printf 'autoindex fixture\n' > "$site_dir/listing-marker.txt"
+  printf '<h1>custom error page fixture</h1>\n' > "$site_dir/custom-404.html"
+
+  PORT="$(python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+  cat > "$config_file" <<EOF
+server {
+    listen 127.0.0.1:$PORT;
+    root $site_dir;
+    err 404 $site_dir/custom-404.html;
+    location / {
+        root $site_dir;
+        allowed_methods GET;
+    }
+    location /index/ {
+        root $site_dir;
+        index home.html;
+        allowed_methods GET;
+    }
+    location /browse/ {
+        root $site_dir;
+        autoindex on;
+        allowed_methods GET;
+    }
+    location /upload {
+        root $upload_dir;
+        upload_dir $upload_dir;
+        allowed_methods POST;
+        maxBody 4;
+    }
+}
+EOF
+
+  "$ROOT_DIR/webserv" "$config_file" > "$TMP/config-directives.log" 2>&1 &
+  INTERFACE_SERVER_PID=$!
+  server_ready=0
+  for attempt in {1..30}; do
+    if python3 - "$PORT" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.5)
+s.close()
+PY
+    then
+      server_ready=1
+      break
+    fi
+    sleep 0.1
+  done
+
+  TOTAL=$((TOTAL + 1)); printf '\n'; line
+  printf '  %sTEST %02d: Temporary configuration server starts%s\n' \
+    "$BOLD$MAGENTA" "$TOTAL" "$RESET"; line
+  if (( server_ready )); then
+    printf '  ACTUAL  : listening on 127.0.0.1:%s\n' "$PORT"
+    printf '  RESULT  : %s✓ PASS%s\n' "$GREEN" "$RESET"
+    PASS=$((PASS + 1))
+  else
+    printf '  ACTUAL  : temporary server did not accept a connection\n'
+    if [[ -f "$TMP/config-directives.log" ]]; then
+      sed -n '1,16p' "$TMP/config-directives.log"
+    fi
+    printf '  RESULT  : %s✗ FAIL%s\n' "$RED" "$RESET"
+    FAIL=$((FAIL + 1))
+  fi
+
+  if (( server_ready )); then
+    request GET '/index/' $'Connection: close\r\n' ''
+    run_test 'Configured index file is served for a directory' 200 "$REQUEST" \
+      'The index directive should select home.html.' 'custom index fixture'
+
+    request GET '/browse/' $'Connection: close\r\n' ''
+    run_test 'Autoindex lists a directory without an index file' 200 "$REQUEST" \
+      'autoindex on should return a directory listing.' 'listing-marker.txt'
+
+    request GET '/missing-config-test-file' $'Connection: close\r\n' ''
+    run_test 'Configured 404 page is used' 404 "$REQUEST" \
+      'The server-level err directive should provide the response body.' \
+      'custom error page fixture'
+
+    upload_path="$upload_dir/$ID-max-body.txt"
+    request POST "/upload/$ID-max-body.txt" $'Content-Length: 4\r\n' 'four'
+    run_test 'Body exactly at maxBody is accepted' 201 "$REQUEST" \
+      'A request body equal to the configured limit should be accepted.'
+    printf 'four' > "$TMP/max-body-expected"
+    check_file 'maxBody upload preserves its body' "$upload_path" "$TMP/max-body-expected"
+
+    oversized_path="$upload_dir/$ID-over-max-body.txt"
+    request POST "/upload/$ID-over-max-body.txt" $'Content-Length: 5\r\n' '12345'
+    run_test 'Body over maxBody is rejected' 413 "$REQUEST" \
+      'A request body above the configured limit should return 413.'
+    check_absent 'Over-limit POST creates no upload' "$oversized_path"
+
+    request GET '/upload/method-check.txt' $'Connection: close\r\n' ''
+    run_test 'Upload route rejects GET and advertises POST' 405 "$REQUEST" \
+      'The upload route allows POST only.' '' 'Allow: POST'
+  fi
+
+  kill "$INTERFACE_SERVER_PID" 2>/dev/null || true
+  wait "$INTERFACE_SERVER_PID" 2>/dev/null || true
+  INTERFACE_SERVER_PID=""
+}
+
 printf '\n%s%s╔══════════════════════════════════════════════════════════╗%s\n' "$BOLD" "$CYAN" "$RESET"
 printf '%s%s║                 WEBSERV INTENSE TEST SUITE                ║%s\n' "$BOLD" "$CYAN" "$RESET"
 printf '%s%s╚══════════════════════════════════════════════════════════╝%s\n' "$BOLD" "$CYAN" "$RESET"
@@ -279,7 +486,7 @@ run_test 'Valid HTTP/1.1 request line' 200 "$REQUEST" 'Valid requests should rea
 request BREW / $'Connection: close\r\n' ''
 run_test 'Unknown method token' 501 "$REQUEST" 'Unknown methods should return 501.'
 request HEAD / $'Connection: close\r\n' ''
-run_test 'HEAD method is not allowed' 405 "$REQUEST" 'HEAD is recognized but is not allowed by the GET-only route.'
+run_test 'HEAD method is not allowed' 405 "$REQUEST" 'HEAD is recognized but is not allowed by the GET-only route.' '' 'Allow: GET, DELETE'
 request GET / $'Connection: close\r\n' ''
 REQUEST="${REQUEST/HTTP\/1.1/HTTP\/1.0}"
 run_test 'Unsupported HTTP/1.0 version' 505 "$REQUEST" 'A syntactically valid but unsupported HTTP/1.x version should return 505.'
@@ -332,11 +539,17 @@ request GET '/.webserv-suite-no-such-dir/' $'Connection: close\r\n' ''
 run_test 'GET missing directory' 404 "$REQUEST" 'A directory that does not exist under the document root should return 404.'
 request GET '/index.html' $'Connection: close\r\n' ''
 run_test 'GET HTML response declares content type' 200 "$REQUEST" 'Static HTML should be sent with an HTML Content-Type header.' '' 'Content-Type: text/html'
+request GET '/redirect' $'Connection: close\r\n' ''
+run_test 'Redirect works on the first configured port' 301 "$REQUEST" 'The 2020 server block configures /redirect.' '' 'Location: /'
 SAVED_PORT="$PORT"
 PORT=8080
 request GET '/index.html' $'Connection: close\r\n' ''
 run_test 'Second configured port serves the same site' 200 "$REQUEST" 'The second listen port in epic.conf should serve its configured document root.' '<title>Webserv</title>'
+request GET '/redirect' $'Connection: close\r\n' ''
+run_test 'Redirect works on the second configured port' 301 "$REQUEST" 'The 8080 server block configures /redirect.' '' 'Location: /'
 PORT="$SAVED_PORT"
+run_interface_binding_test
+run_config_directive_test
 
 # POST cases
 line; printf '  %sPOST%s\n' "$BOLD$CYAN" "$RESET"; line

@@ -1,5 +1,6 @@
 #include "Server.hpp"
 #include <set>
+#include <netdb.h>
 
 namespace
 {
@@ -105,6 +106,29 @@ namespace
 void Init(Server& server)
 {
     std::signal(SIGPIPE, SIG_IGN);
+
+    addrinfo hints;
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_NUMERICHOST;
+    addrinfo* addresses = NULL;
+    int addressStatus = getaddrinfo(server.conf.listenAddress.c_str(), NULL,
+                                    &hints, &addresses);
+    if (addressStatus != 0)
+        throw std::runtime_error(std::string("invalid listen address '")
+                                 + server.conf.listenAddress + "': "
+                                 + gai_strerror(addressStatus));
+    if (addresses == NULL)
+        throw std::runtime_error("could not resolve listen address");
+
+    sockaddr_in address;
+    std::memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr = reinterpret_cast<sockaddr_in*>(addresses->ai_addr)->sin_addr;
+    address.sin_port = htons(server.conf.listen);
+    freeaddrinfo(addresses);
+
     server.serverFD = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
 
@@ -123,12 +147,6 @@ void Init(Server& server)
         throw std::runtime_error("setsockopt() failed");
     }
 
-    sockaddr_in address;
-    std::memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(server.conf.listen);
-
     if (bind(server.serverFD, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1)
     {
         close(server.serverFD);
@@ -141,7 +159,8 @@ void Init(Server& server)
         server.serverFD = -1;
         throw std::runtime_error("listen() failed");
     }
-    std::cout << "Listening on port " << server.conf.listen << std::endl;
+    std::cout << "Listening on " << server.conf.listenAddress << ':'
+              << server.conf.listen << std::endl;
 }
 
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting)
@@ -619,8 +638,25 @@ namespace
         std::vector<std::pair<std::string, std::string> > extraHeaders;
         if (code == 405 && config != clientConfigs.end())
         {
+            const LocationConfig* location = NULL;
+            std::map<int, std::string>::const_iterator request = reqs.find(fd);
+            if (request != reqs.end())
+            {
+                size_t firstSpace = request->second.find(' ');
+                if (firstSpace != std::string::npos)
+                {
+                    size_t secondSpace = request->second.find(' ', firstSpace + 1);
+                    if (secondSpace != std::string::npos)
+                    {
+                        std::string target = request->second.substr(
+                            firstSpace + 1, secondSpace - firstSpace - 1);
+                        location = findMatchingLocation(
+                            config->second, target, "HEAD");
+                    }
+                }
+            }
             extraHeaders.push_back(std::make_pair(
-                "Allow", allowHeaderValue(config->second, NULL)));
+                "Allow", allowHeaderValue(config->second, location)));
         }
         const ServerConfig* serverConfig = NULL;
         if (config != clientConfigs.end())

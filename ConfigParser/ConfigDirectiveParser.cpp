@@ -8,7 +8,31 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
     if (keyword == "listen")
     {
         expect_and_increase(tokens, pos, WORD);
-        server.listen = static_cast<unsigned int>(std::stoi(tokens[pos - 1].word));
+        const std::string& listenValue = tokens[pos - 1].word;
+        size_t separator = listenValue.find(':');
+        std::string portText = listenValue;
+        if (separator != std::string::npos)
+        {
+            if (separator == 0 || separator + 1 == listenValue.size()
+                || listenValue.find(':', separator + 1) != std::string::npos)
+                throw std::runtime_error("listen must use IPv4:port format");
+            server.listenAddress = listenValue.substr(0, separator);
+            portText = listenValue.substr(separator + 1);
+        }
+        if (portText.find_first_not_of("0123456789") != std::string::npos)
+            throw std::runtime_error("listen port must be numeric");
+        unsigned long port = 0;
+        try
+        {
+            port = std::stoul(portText);
+        }
+        catch (const std::exception&)
+        {
+            throw std::runtime_error("listen port must be between 1 and 65535");
+        }
+        if (port == 0 || port > 65535)
+            throw std::runtime_error("listen port must be between 1 and 65535");
+        server.listen = static_cast<unsigned int>(port);
     }
     else if (keyword == "root")
     {

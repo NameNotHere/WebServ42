@@ -15,7 +15,8 @@ void print_config(const std::vector<ServerConfig>& servers)
     {
         std::cout << "Server\n";
         std::cout << "  name: " << server.name << '\n';
-        std::cout << "  listen: " << server.listen << '\n';
+        std::cout << "  listen: " << server.listenAddress << ':'
+                  << server.listen << '\n';
         std::cout << "  root: " << server.root << '\n';
         std::cout << "\t\tErrors: \n" ;
         for (auto &[key, value] : server.errors)

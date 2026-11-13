@@ -23,6 +23,10 @@ The supplied epic.conf listens on ports 2020 and 8080. Stop the server with
 Ctrl-C. Configuration paths are read relative to the directory where the
 server is started.
 
+The `listen` directive accepts a port to listen on all IPv4 interfaces, or an
+IPv4 address and port separated by a colon, for example
+`listen 127.0.0.1:8080;`.
+
 ## Resources
 
 - [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110.html)

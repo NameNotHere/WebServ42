@@ -57,6 +57,7 @@ struct ServerConfig
 {
     std::string name;
     std::map<int, std::string> errors;
+    std::string listenAddress = "0.0.0.0";
     unsigned int listen = 0;
     std::string root;
     std::vector<LocationConfig> locations;
