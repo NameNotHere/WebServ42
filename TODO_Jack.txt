@@ -7,6 +7,7 @@
 - be able to recreate temp.conf for eval maybe
 - REMOVE AGENTS.md, evaluationp_Pdf and subject_pdf before eval
 - Check all files again for any weird shit
-- Organise server.hpp, split responder into new file, maybe make another responder.hpp
 - No destructor, assignment operator overload in cgiHandler.hpp/.cpp
 - Nothing in cgi helpers
+- Maybe remove or comment out printConfig() in main
+

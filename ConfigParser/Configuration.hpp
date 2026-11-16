@@ -46,8 +46,6 @@ struct LocationConfig
     size_t maxBody =        0;
     bool hasMaxBody =       false;
     bool autoindex =        false;
-
-    //LocationConfig() : maxBody(0), hasMaxBody(false), autoindex(false) {}
 };
 
 struct ServerConfig
@@ -60,8 +58,6 @@ struct ServerConfig
     std::vector<LocationConfig> locations;
     std::vector<ALLOWED_METHODS> allowed_methods;
     int serverFD = -1;
-
-    //ServerConfig() : listen(0), serverFD(-1) {}
 };
 
 

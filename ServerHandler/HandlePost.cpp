@@ -56,34 +56,6 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
     return bestPrefix;
 }
 
-bool isPostAllowed(const ServerConfig& config, const LocationConfig& location)
-{
-    if (!location.allowed_methods.empty())
-    {
-        for (size_t i = 0; i < location.allowed_methods.size(); ++i)
-        {
-            if (location.allowed_methods[i] == "POST")
-                return true;
-        }
-
-        return false;
-    }
-
-    if (!config.allowed_methods.empty())
-    {
-        for (size_t i = 0; i < config.allowed_methods.size(); ++i)
-        {
-            if (config.allowed_methods[i] == POST)
-                return true;
-        }
-
-        return false;
-    }
-
-    // No explicit permission configured.
-    return false;
-}
-
 bool getUploadFilename(const std::string& target, const LocationConfig& location, std::string& filename)
 {
     size_t queryPos = target.find('?');
@@ -214,9 +186,6 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
 
         return 500;
     }
-
-    std::cerr << "DEBUG: opened file successfully, body size = "
-          << body.size() << '\n';
 
     bool success = writeRequestBody(fileFd, body);
 

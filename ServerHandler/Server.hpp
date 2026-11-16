@@ -43,7 +43,6 @@ void runHttpParser(int fd, std::map<int, std::string>& reqs,std::map<int, Server
 bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config);
 const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target, const std::string& method);
-bool isPostAllowed(const ServerConfig& config, const LocationConfig& location);
 bool getUploadFilename(const std::string& target, const LocationConfig& location, std::string& filename);
 int openUploadDirectory(const LocationConfig& location);
 int openUploadFile(int dirFd, const std::string& filename, bool& existed);
