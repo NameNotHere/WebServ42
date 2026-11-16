@@ -5,6 +5,7 @@
 #include "../ConfigParser/Configuration.hpp"
 #include "../www/cgi/CgiHandler.hpp"
 #include "../www/cgi/CgiResponse.hpp"
+#include "Responder.hpp"
 #include <unistd.h>
 #include <iostream>
 #include <poll.h>
@@ -33,35 +34,14 @@ struct Server
     ServerConfig conf;
 };
 
-bool buildResponse(HttpParser& http, int clientFd, bool& closeConnection,
-                   const ServerConfig& config, CgiHandler& cgi,
-                   std::map<int, CgiJob>& cgiJobs);
 void print_config(const std::vector<ServerConfig>& servers);
 void Init(Server& server);
 void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
 void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs);
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
-void runHttpParser(int fd, std::map<int, std::string>& reqs,
-                   std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
-                   std::map<int, CgiJob>& cgiJobs);
-std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}, const ServerConfig* config = NULL);
-bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code, const ServerConfig* config = NULL, const std::vector<std::pair<std::string, std::string> >& extraHeaders = std::vector<std::pair<std::string, std::string> >());
-bool queueCgiResponse(int clientFd, const CgiJob& job, CGIResult& result,
-                      const ServerConfig* config = NULL);
-bool hasPendingOutput(int clientFd);
-bool flushPendingOutput(int clientFd);
-void clearPendingOutput(int clientFd);
-void closeAfterPendingOutput(int clientFd);
-bool shouldCloseAfterOutput(int clientFd);
-std::string statusText(int code);
-std::string allowHeaderValue(const ServerConfig& config, const LocationConfig* location);
+void runHttpParser(int fd, std::map<int, std::string>& reqs,std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,std::map<int, CgiJob>& cgiJobs);
 bool handleGet(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config);
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config);
-ssize_t sendAll(int fd, const char* buf, size_t len);
-std::string normalizeTarget(const std::string& rawTarget);
-std::string toLower(std::string s);
-std::string resolveRequestedPath(const std::string& root, const std::string& target);
-bool sendFileBody(int clientFd, int fd_in, off_t fileSize);
 const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target, const std::string& method);
 bool isPostAllowed(const ServerConfig& config, const LocationConfig& location);
 bool getUploadFilename(const std::string& target, const LocationConfig& location, std::string& filename);

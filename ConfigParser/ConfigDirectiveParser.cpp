@@ -1,11 +1,9 @@
 #include "Configuration.hpp"
 
-void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, ServerConfig& server)
+namespace
 {
-    std::string keyword = tokens[pos].word;
-
-    pos++;
-    if (keyword == "listen")
+    void parseListenDirective(const std::vector<Token>& tokens, size_t& pos,
+                              ServerConfig& server)
     {
         expect_and_increase(tokens, pos, WORD);
         const std::string& listenValue = tokens[pos - 1].word;
@@ -34,12 +32,16 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
             throw std::runtime_error("listen port must be between 1 and 65535");
         server.listen = static_cast<unsigned int>(port);
     }
-    else if (keyword == "root")
+
+    void parseRootDirective(const std::vector<Token>& tokens, size_t& pos,
+                            ServerConfig& server)
     {
         expect_and_increase(tokens, pos, WORD);
         server.root = tokens[pos - 1].word;
     }
-    else if (keyword == "err")
+
+    void parseErrorDirective(const std::vector<Token>& tokens, size_t& pos,
+                             ServerConfig& server)
     {
         expect_and_increase(tokens, pos, WORD);
         int code = std::stoi(tokens[pos - 1].word);
@@ -51,25 +53,26 @@ void parse_server_directive(const std::vector<Token>& tokens, size_t& pos, Serve
         if (!std::filesystem::exists(err_path))
             throw std::runtime_error("Error page file does not exist: " + server.errors[code]);
     }
-    else
-        throw std::runtime_error("unknown server directive: " + keyword);
-    expect_and_increase(tokens, pos, SEMICOLON);
-}
 
-void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, LocationConfig& location)
-{
-    if (pos >= tokens.size())
-        throw std::runtime_error("unexpected end of file");
-
-    std::string keyword = tokens[pos].word;
-    pos++;
-    if (keyword == "root")
+    void parseLocationPathDirective(const std::vector<Token>& tokens,
+                                    size_t& pos, LocationConfig& location,
+                                    const std::string& keyword)
     {
         expect_and_increase(tokens, pos, WORD);
-        location.root = tokens[pos - 1].word;
+        const std::string& value = tokens[pos - 1].word;
+        if (keyword == "root")
+            location.root = value;
+        else if (keyword == "index")
+            location.index = value;
+        else if (keyword == "cgi_path")
+            location.cgi_path = value;
+        else
+            location.uploadDir = value;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
-    else if (keyword == "allowed_methods")
+
+    void parseLocationAllowedMethods(const std::vector<Token>& tokens,
+                                     size_t& pos, LocationConfig& location)
     {
         while (pos < tokens.size() && tokens[pos].type != SEMICOLON)
         {
@@ -78,29 +81,12 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         }
         expect_and_increase(tokens, pos, SEMICOLON);
     }
-    else if (keyword == "index")
-    {
-        expect_and_increase(tokens, pos, WORD);
-        location.index = tokens[pos - 1].word;
-        expect_and_increase(tokens, pos, SEMICOLON);
-    }
-    else if (keyword == "cgi_path")
-    {
-        expect_and_increase(tokens, pos, WORD);
-        location.cgi_path = tokens[pos - 1].word;
-        expect_and_increase(tokens, pos, SEMICOLON);
-    }
-    else if (keyword == "upload_dir")
-    {
-        expect_and_increase(tokens, pos, WORD);
-        location.uploadDir = tokens[pos - 1].word;
-        expect_and_increase(tokens, pos, SEMICOLON);
-    }
-    else if (keyword == "maxBody")
+
+    void parseLocationMaxBody(const std::vector<Token>& tokens, size_t& pos,
+                              LocationConfig& location)
     {
         expect_and_increase(tokens, pos, WORD);
         const std::string& value = tokens[pos - 1].word;
-
         if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
             throw std::runtime_error("invalid maxBody value");
 
@@ -121,7 +107,9 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         location.hasMaxBody = true;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
-    else if (keyword == "return")
+
+    void parseLocationReturn(const std::vector<Token>& tokens, size_t& pos,
+                             LocationConfig& location)
     {
         if (location.redirectCode != 0)
             throw std::runtime_error("duplicate return directive");
@@ -141,7 +129,9 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
         location.redirectCode = code;
         expect_and_increase(tokens, pos, SEMICOLON);
     }
-    else if (keyword == "autoindex")
+
+    void parseLocationAutoindex(const std::vector<Token>& tokens, size_t& pos,
+                                LocationConfig& location)
     {
         expect_and_increase(tokens, pos, WORD);
         std::string value = tokens[pos - 1].word;
@@ -153,6 +143,44 @@ void parse_location_directive(const std::vector<Token>& tokens, size_t& pos, Loc
             throw std::runtime_error("autoindex must be on or off");
         expect_and_increase(tokens, pos, SEMICOLON);
     }
+}
+
+void parse_server_directive(const std::vector<Token>& tokens, size_t& pos,
+                            ServerConfig& server)
+{
+    std::string keyword = tokens[pos].word;
+
+    pos++;
+    if (keyword == "listen")
+        parseListenDirective(tokens, pos, server);
+    else if (keyword == "root")
+        parseRootDirective(tokens, pos, server);
+    else if (keyword == "err")
+        parseErrorDirective(tokens, pos, server);
+    else
+        throw std::runtime_error("unknown server directive: " + keyword);
+    expect_and_increase(tokens, pos, SEMICOLON);
+}
+
+void parse_location_directive(const std::vector<Token>& tokens, size_t& pos,
+                              LocationConfig& location)
+{
+    if (pos >= tokens.size())
+        throw std::runtime_error("unexpected end of file");
+
+    std::string keyword = tokens[pos].word;
+    pos++;
+    if (keyword == "root" || keyword == "index"
+        || keyword == "cgi_path" || keyword == "upload_dir")
+        parseLocationPathDirective(tokens, pos, location, keyword);
+    else if (keyword == "allowed_methods")
+        parseLocationAllowedMethods(tokens, pos, location);
+    else if (keyword == "maxBody")
+        parseLocationMaxBody(tokens, pos, location);
+    else if (keyword == "return")
+        parseLocationReturn(tokens, pos, location);
+    else if (keyword == "autoindex")
+        parseLocationAutoindex(tokens, pos, location);
     else
         throw std::runtime_error("unknown location directive: " + keyword);
 }

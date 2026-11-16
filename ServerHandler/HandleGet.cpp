@@ -83,8 +83,7 @@ namespace
         return location;
     }
 
-    bool sendDirectoryRedirect(int clientFd, const std::string& version,
-                               const std::string& decodedTarget)
+    bool sendDirectoryRedirect(int clientFd, const std::string& version, const std::string& decodedTarget)
     {
         std::ostringstream response;
         response << version << " 301 Moved Permanently\r\n"
@@ -298,6 +297,5 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         else
             path += index;
     }
-    return serveGetFile(clientFd, path, decodedTarget, version, keepAlive,
-                        config);
+    return serveGetFile(clientFd, path, decodedTarget, version, keepAlive, config);
 }

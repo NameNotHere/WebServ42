@@ -88,9 +88,6 @@ bool isMethodAllowed(const ServerConfig& config, const LocationConfig* location,
         }
         return false;
     }
-
-    // Without an explicit method list, locations are read-only by default.
-    // POST and DELETE must be enabled in the location or server config.
     return method == "GET";
 }
 
@@ -106,7 +103,6 @@ bool decodeUriPath(const std::string& encoded, std::string& decoded)
             continue;
         }
 
-        // A percent sign must be followed by two hexadecimal digits.
         if (i + 2 >= encoded.size())
             return false;
 
@@ -117,14 +113,11 @@ bool decodeUriPath(const std::string& encoded, std::string& decoded)
         if (end == hex || *end != '\0')
             return false;
 
-        // Reject decoded NUL bytes and encoded path separators
-        // to avoid ambiguous path handling.
         if (value == 0 || value == '/' || value == '\\')
             return false;
 
         decoded += static_cast<char>(value);
         i += 2;
     }
-
     return true;
 }

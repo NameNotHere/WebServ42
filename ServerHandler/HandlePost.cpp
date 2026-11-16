@@ -177,12 +177,11 @@ bool writeRequestBody(int fileFd, const std::string& body)
             body.size() - written
         );
 
-        if (result <= 0) //removed errno if statement as that is forbidden for server behavior
+        if (result <= 0)
             return false;
 
         written += static_cast<size_t>(result);
     }
-
     return true;
 }
 
@@ -269,8 +268,7 @@ bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, 
 
 bool handlePost(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config)
 {
-    const LocationConfig* location =
-        findMatchingLocation(config, http.getTarget(), "POST");
+    const LocationConfig* location = findMatchingLocation(config, http.getTarget(), "POST");
 
     if (location == NULL)
     {
@@ -279,10 +277,9 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
 
     if (!isMethodAllowed(config, location, "POST"))
     {
-        return sendErrorResponse(
-            clientFd, version, keepAlive, 405, &config,
-            std::vector<std::pair<std::string, std::string> >(1,
-                std::make_pair("Allow", allowHeaderValue(config, location))));
+        return sendErrorResponse(clientFd, version, keepAlive, 405, &config,
+                                 std::vector<std::pair<std::string, std::string>
+                                 > (1,std::make_pair("Allow", allowHeaderValue(config, location))));
     }
 
     std::string filename;

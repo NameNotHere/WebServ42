@@ -35,10 +35,9 @@ std::string makeErrorResponse(int code, const std::string& version, bool keepAli
     return out.str();
 }
 
-bool sendErrorResponse(
-    int clientFd, const std::string& version, bool keepAlive, int code,
-    const ServerConfig* config,
-    const std::vector<std::pair<std::string, std::string> >& extraHeaders)
+bool sendErrorResponse(int clientFd, const std::string& version, bool keepAlive, int code,
+                       const ServerConfig* config,
+                       const std::vector<std::pair<std::string, std::string> >& extraHeaders)
 {
     std::string resp = makeErrorResponse(code, version, keepAlive,
                                          extraHeaders,

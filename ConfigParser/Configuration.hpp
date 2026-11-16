@@ -2,12 +2,9 @@
 #define CONFIG_HPP
 
 #include <cstddef>
-#include <cstdlib>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <limits>
 #include <map>
 #include <sstream>
 #include <stdexcept>
