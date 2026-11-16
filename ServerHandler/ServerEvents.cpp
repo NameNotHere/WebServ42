@@ -5,9 +5,23 @@
 
 namespace ServerInternal
 {
+    volatile sig_atomic_t shutdownRequested = 0;
     std::set<int> largePostClients;
     std::set<int> largePostWaiters;
     std::set<int> peerClosedClients;
+
+    void handleShutdownSignal(int)
+    {
+        shutdownRequested = 1;
+    }
+
+    void installShutdownHandlers()
+    {
+        shutdownRequested = 0;
+        if (std::signal(SIGINT, handleShutdownSignal) == SIG_ERR
+            || std::signal(SIGTERM, handleShutdownSignal) == SIG_ERR)
+            throw std::runtime_error("could not install shutdown signal handlers");
+    }
 }
 
 using namespace ServerInternal;
@@ -78,6 +92,42 @@ namespace
                 break;
             }
         }
+    }
+
+    bool isListener(int fd, const std::vector<Server>& hosting)
+    {
+        for (size_t i = 0; i < hosting.size(); ++i)
+            if (hosting[i].serverFD == fd)
+                return true;
+        return false;
+    }
+
+    void cleanupEventLoop(
+        const std::vector<Server>& hosting, std::vector<pollfd>& fds,
+        std::map<int, std::string>& requests,
+        std::map<int, ServerConfig>& configs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        size_t i = 0;
+        while (i < fds.size())
+        {
+            int fd = fds[i].fd;
+            if (isListener(fd, hosting))
+            {
+                ++i;
+                continue;
+            }
+            removeClient(fd, fds, requests, configs, cgi, cgiJobs);
+        }
+        for (std::map<int, CgiJob>::iterator it = cgiJobs.begin();
+             it != cgiJobs.end(); ++it)
+            cgi.cancel(it->second);
+        cgiJobs.clear();
+        requests.clear();
+        configs.clear();
+        largePostClients.clear();
+        largePostWaiters.clear();
+        peerClosedClients.clear();
     }
 }
 
@@ -355,7 +405,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
     std::map<int, CgiJob> cgiJobs;
     CgiHandler cgi("/usr/bin/python3", 5);
 
-    while (true)
+    while (!shutdownRequested)
     {
         promoteLargePostWaiters(fds, reqs);
         updateClientPollEvents(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
@@ -366,14 +416,16 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         appendCgiPollSources(cgiJobs, pollFds, sources);
 
         int timeout = 100;
-        if (cgiJobs.empty())
-            timeout = -1;
         int ready = poll(pollFds.data(), pollFds.size(), timeout);
         if (ready == -1)
         {
+            if (shutdownRequested)
+                break;
             std::cerr << "poll() failed\n";
             break;
         }
+        if (shutdownRequested)
+            break;
         for (size_t j = 0; j < pollFds.size(); ++j)
         {
             short events = pollFds[j].revents;
@@ -383,4 +435,5 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         }
         completeCgiJobs(cgi, cgiJobs, reqs, clientConfigs, fds);
     }
+    cleanupEventLoop(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
 }

@@ -23,9 +23,16 @@ The supplied epic.conf listens on ports 2020 and 8080. Stop the server with
 Ctrl-C. Configuration paths are read relative to the directory where the
 server is started.
 
-The `listen` directive accepts a port to listen on all IPv4 interfaces, or an
+The listen directive accepts a port to listen on all IPv4 interfaces, or an
 IPv4 address and port separated by a colon, for example
 `listen 127.0.0.1:8080;`.
+
+To run seige use:
+siege -b -c 10 -r 20 http://127.0.0.1:2020/
+10 concurrent clients with 20 requests each. 
+siege -b -c 10 -t 1M http://127.0.0.1:2020/
+This is a 1 minute test
+
 
 ## Resources
 

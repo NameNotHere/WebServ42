@@ -1,4 +1,5 @@
 #include "ServerHandler/Server.hpp"
+#include "ServerHandler/ServerInternal.hpp"
 #include "ConfigParser/Configuration.hpp"
 
 #include <fstream>
@@ -64,6 +65,7 @@ int main(int argc, char** argv)
     std::vector<Server> hosting;
     try                                         
     {                                           
+        ServerInternal::installShutdownHandlers();
         parse(configs, lex(config));
         print_config(configs);
 
@@ -79,12 +81,26 @@ int main(int argc, char** argv)
             return std::cerr << "No server configured\n", 1;
         std::vector<pollfd> fds = createPollFds(hosting);
         runEventLoop(hosting, fds, reqs);
+        for (size_t i = 0; i < hosting.size(); ++i)
+        {
+            if (hosting[i].serverFD != -1)
+            {
+                close(hosting[i].serverFD);
+                hosting[i].serverFD = -1;
+            }
+        }
     }                                           
     catch (const std::exception& e)             
     {                                           
         std::cerr << "Error: " << e.what() << '\n';
         for (size_t i = 0; i < hosting.size(); ++i)
-            close(hosting[i].serverFD);
+        {
+            if (hosting[i].serverFD != -1)
+            {
+                close(hosting[i].serverFD);
+                hosting[i].serverFD = -1;
+            }
+        }
         return 1;
     }                                           
     return 0;

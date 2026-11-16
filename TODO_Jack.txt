@@ -10,4 +10,4 @@
 - No destructor, assignment operator overload in cgiHandler.hpp/.cpp
 - Nothing in cgi helpers
 - Maybe remove or comment out printConfig() in main
-
+- 3 global variables. 
