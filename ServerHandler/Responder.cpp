@@ -51,7 +51,7 @@ std::string toLower(std::string s)
 
 std::string statusText(int code)
 {
-    return Response::statusMsg(code);
+    return statusMsg(code);
 }
 
 std::string allowHeaderValue(const ServerConfig& config,
@@ -234,7 +234,7 @@ bool flushPendingOutput(int clientFd)
                 if (segment.fileRemaining == 0)
                 {
                     if (segment.fileFd != -1)
-                        close(segment.fileFd);git checkout $(git rev-list -n 1 HEAD -- www/cgi/CgiHelper.cpp)^ -- www/cgi/CgiHelper.cpp www/cgi/CgiHelper.hpp
+                        close(segment.fileFd);
                     output->second.segments.pop_front();
                 }
                 continue;
