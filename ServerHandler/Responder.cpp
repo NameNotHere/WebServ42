@@ -234,7 +234,7 @@ bool flushPendingOutput(int clientFd)
                 if (segment.fileRemaining == 0)
                 {
                     if (segment.fileFd != -1)
-                        close(segment.fileFd);
+                        close(segment.fileFd);git checkout $(git rev-list -n 1 HEAD -- www/cgi/CgiHelper.cpp)^ -- www/cgi/CgiHelper.cpp www/cgi/CgiHelper.hpp
                     output->second.segments.pop_front();
                 }
                 continue;
