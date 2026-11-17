@@ -3,11 +3,7 @@
 
 #include <map>
 #include <string>
-#include <unistd.h>
 #include <iostream>
-#include <algorithm>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 class HttpParser {
 private:
@@ -40,8 +36,8 @@ public:
 	{
 		BODY_VALID,
 		BODY_INVALID,
-		BODY_INCOMPLETE,
-		BODY_TOO_LARGE
+		BODY_TOO_LARGE,
+		BODY_INCOMPLETE
 	};
 
 	HttpParser();

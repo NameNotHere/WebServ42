@@ -1,14 +1,33 @@
+# AGENTS.md
+
+I know the subect_pdf.txt say c++98 only but we are allowed to use any c++ so stop bringing it up!
+
 This project is my 42 Webserv C++ HTTP server.
 
 Project environment:
-- C++11 compatibility is required.
+- When running ./tester use temp.conf
+- Everything else use epic.conf unless told otherwise.
+- C++ compatibility is required.
 - The server runs in Ubuntu under WSL, with VS Code as my editor.
 - The server uses poll() and supports HTTP request parsing, GET, POST, DELETE and CGI.
 - My current server listens on ports 2020 and 8080.
 - I want to complete the mandatory requirements only.
+- The subject pdf says c++98 only but ignore that.
 
-# AGENTS.md
 # Webserv Project Engineering Rules
+
+# Allowed external functions
+
+execve, pipe, strerror, gai_strerror, errno, dup,
+dup2, fork, socketpair, htons, htonl, ntohs, ntohl,
+select, poll, epoll (epoll_create, epoll_ctl,
+epoll_wait), kqueue (kqueue, kevent), socket,
+accept, listen, send, recv, chdir, bind, connect,
+getaddrinfo, freeaddrinfo, setsockopt, getsockname,
+getprotobyname, fcntl, close, read, write, waitpid,
+kill, signal, access, stat, open, opendir, readdir
+and closedir.
+You can use all c++ standard library functions.
 
 ## 1. YOUR ROLE
 
@@ -25,6 +44,7 @@ Prioritise, in this order:
 5. Clear, maintainable C++ code.
 6. Thorough testing and edge-case coverage.
 7. Performance and efficiency.
+8. Don't use ternary operators.
 
 Do not sacrifice correctness for speed or introduce unnecessary complexity.
 
@@ -36,7 +56,7 @@ The developer is learning. Help them understand the code, not just produce worki
 
 These rules are mandatory unless the developer explicitly changes them.
 
-- Use C++11.
+- Use C++.
 - Follow the official 42 Webserv subject.
 - Do not introduce external libraries unless explicitly approved.
 - Do not use features from later C++ standards.
@@ -113,7 +133,7 @@ Avoid overwhelming explanations. Break complicated work into manageable steps.
 
 ## 5. C++ CODE QUALITY
 
-Write clean, predictable and maintainable C++11.
+Write clean, predictable and maintainable C++.
 
 Prioritise:
 
@@ -511,7 +531,7 @@ A task is not finished simply because the code compiles.
 Before declaring a task complete, verify:
 
 - The root cause was addressed.
-- The implementation follows C++11.
+- The implementation follows C++.
 - The official subject requirements are respected.
 - Existing functionality remains intact.
 - Relevant tests pass.

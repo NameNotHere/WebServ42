@@ -1,8 +1,10 @@
 #include "Server.hpp"
-#include <sys/uio.h>
+#include <cerrno>
 
 namespace
 {
+    const size_t MAX_COALESCED_OUTPUT = 64 * 1024;
+
     struct OutputSegment
     {
         std::string bytes;
@@ -32,13 +34,12 @@ namespace
     std::map<int, ClientOutput> clientOutputs;
 
     bool targetHasExtension(const std::string& target,
-                            const std::string& extension)
+                           const std::string& extension)
     {
         const size_t queryPosition = target.find('?');
         const std::string path = target.substr(0, queryPosition);
         return path.size() >= extension.size()
-            && path.compare(path.size() - extension.size(),
-                            extension.size(), extension) == 0;
+            && path.compare(path.size() - extension.size(), extension.size(), extension) == 0;
     }
 }
 
@@ -159,59 +160,87 @@ bool flushPendingOutput(int clientFd)
         {
             if (!segment.isFile)
             {
-                struct iovec vectors[16];
-                size_t vectorCount = 0;
+                size_t batchSize = 0;
+                size_t batchCount = 0;
                 for (std::deque<OutputSegment>::const_iterator it =
                          output->second.segments.begin();
-                     it != output->second.segments.end() && vectorCount < 16;
-                     ++it)
+                     it != output->second.segments.end() && !it->isFile; ++it)
                 {
-                    if (it->isFile)
+                    size_t available = it->bytes.size() - it->offset;
+                    if (available > MAX_COALESCED_OUTPUT - batchSize)
+                    {
+                        batchCount = 0;
                         break;
-                    vectors[vectorCount].iov_base = const_cast<char*>(
-                        it->bytes.data() + it->offset);
-                    vectors[vectorCount].iov_len = it->bytes.size() - it->offset;
-                    ++vectorCount;
+                    }
+                    batchSize += available;
+                    ++batchCount;
                 }
 
-                struct msghdr message;
-                std::memset(&message, 0, sizeof(message));
-                message.msg_iov = vectors;
-                message.msg_iovlen = vectorCount;
-                ssize_t sent = sendmsg(clientFd, &message, 0);
-                if (sent <= 0)
-                    return false;
-
-                size_t remaining = static_cast<size_t>(sent);
-                while (remaining > 0 && !output->second.segments.empty())
+                if (batchCount > 1)
                 {
-                    OutputSegment& pending = output->second.segments.front();
-                    size_t available = pending.bytes.size() - pending.offset;
-                    if (remaining >= available)
+                    std::string batch;
+                    batch.reserve(batchSize);
+                    for (std::deque<OutputSegment>::const_iterator it =
+                             output->second.segments.begin();
+                         it != output->second.segments.end() && !it->isFile;
+                         ++it)
+                        batch.append(it->bytes, it->offset,
+                                     it->bytes.size() - it->offset);
+
+                    ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
+                    if (sent <= 0)
                     {
-                        remaining -= available;
-                        output->second.segments.pop_front();
+                        if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
+                                           || errno == EINTR))
+                            return true;
+                        return false;
                     }
-                    else
+
+                    size_t remaining = static_cast<size_t>(sent);
+                    while (remaining > 0 && !output->second.segments.empty())
                     {
-                        pending.offset += remaining;
-                        remaining = 0;
+                        OutputSegment& pending = output->second.segments.front();
+                        size_t available = pending.bytes.size() - pending.offset;
+                        if (remaining >= available)
+                        {
+                            remaining -= available;
+                            output->second.segments.pop_front();
+                        }
+                        else
+                        {
+                            pending.offset += remaining;
+                            remaining = 0;
+                        }
                     }
+                    return true;
                 }
-                return true;
             }
 
             ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                                 segment.bytes.size() - segment.offset, 0);
             if (sent <= 0)
-                return false;
-            segment.offset += static_cast<size_t>(sent);
-            if (segment.offset == segment.bytes.size()
-                && segment.fileRemaining == 0)
             {
-                close(segment.fileFd);
-                output->second.segments.pop_front();
+                if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
+                                   || errno == EINTR))
+                    return true;
+                return false;
             }
+            segment.offset += static_cast<size_t>(sent);
+            if (segment.offset < segment.bytes.size())
+                return true;
+
+            if (segment.isFile)
+            {
+                if (segment.fileRemaining == 0)
+                {
+                    if (segment.fileFd != -1)
+                        close(segment.fileFd);
+                    output->second.segments.pop_front();
+                }
+                continue;
+            }
+
+            output->second.segments.pop_front();
             return true;
         }
 
@@ -337,7 +366,6 @@ bool buildResponse(HttpParser& http, int clientFd,
                     std::make_pair("Allow", allowHeaderValue(config, location))));
 
         CGIRequest request;
-
         std::string target = http.getTarget();
         size_t queryPosition = target.find('?');
         std::string scriptUri = target;
@@ -357,12 +385,13 @@ bool buildResponse(HttpParser& http, int clientFd,
         const std::string* root = &config.root;
         if (configuredCgi && !location->root.empty())
             root = &location->root;
+
         std::string scriptPathUri = scriptUri;
         if (configuredCgi)
         {
             size_t lastSlash = scriptUri.find_last_of('/');
             if (lastSlash != std::string::npos)
-                scriptPathUri = scriptUri.substr(lastSlash + 1);
+                scriptPathUri = "/" + scriptUri.substr(lastSlash + 1);
         }
 
         request.script_path = resolveRequestedPath(*root, scriptPathUri);
@@ -374,17 +403,41 @@ bool buildResponse(HttpParser& http, int clientFd,
 
         request.body = http.takeBody();
         request.headers = http.getHeaders();
-
         request.server_protocol = version;
         request.server_name = findHeaderValue(http.getHeaders(), "host");
         request.server_software = "webserv/1.0";
         request.server_port = http.getPortNum();
+        return request;
+    }
 
+    bool startCgiResponse(HttpParser& http, int clientFd, bool keepAlive,
+                          const ServerConfig& config, CgiHandler& cgi,
+                          std::map<int, CgiJob>& cgiJobs,
+                          const LocationConfig* location,
+                          bool configuredCgi, const std::string& version)
+    {
+        if (configuredCgi && !isMethodAllowed(config, location, toUpper(http.getMethod())))
+        {
+            std::vector<std::pair<std::string, std::string> > extraHeaders;
+            extraHeaders.push_back(std::make_pair("Allow", allowHeaderValue(config, location)));
+            return sendErrorResponse(clientFd, version, keepAlive, 405, &config, extraHeaders);
+        }
+        CGIRequest request = makeCgiRequest(http, config, location, configuredCgi, version);
+        if (!configuredCgi)
+        {
+            int scriptError = automaticCgiScriptErrorStatus(request.script_path);
+            if (scriptError != 0)
+                return sendErrorResponse(clientFd, version, keepAlive,
+                                         scriptError, &config);
+        }
         CgiJob job;
-        const unsigned int timeoutSeconds = request.body.size() >= 8 * 1024 * 1024
-            ? 30 : 5;
+        unsigned int timeoutSeconds = 5;
+
+        if (request.body.size() >= 8 * 1024 * 1024)
+            timeoutSeconds = 30;
         if (!cgi.start(request, job, timeoutSeconds))
             return sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+
         job.clientFd = clientFd;
         job.httpVersion = version;
         job.keepAlive = keepAlive;
@@ -392,14 +445,47 @@ bool buildResponse(HttpParser& http, int clientFd,
         return true;
     }
 
-    if (toLower(http.getMethod()) == "get")
-        return handleGet(http, version, keepAlive, clientFd, config);
+    bool dispatchResponse(HttpParser& http, int clientFd, bool keepAlive, const ServerConfig& config)
+    {
+        std::string method = toLower(http.getMethod());
+        if (method == "get")
+        {
+            handleGet(http, http.getVersion(), keepAlive, clientFd, config);
+            return true;
+        }
+        if (method == "post")
+        {
+            handlePost(http, http.getVersion(), keepAlive, clientFd, config);
+            return true;
+        }
+        if (method == "delete")
+        {
+            handleDelete(clientFd, http.getVersion(), keepAlive,
+                         http.getTarget(), config);
+            return true;
+        }
+        return false;
+    }
+}
 
-    else if (toLower(http.getMethod()) == "post")
-        return handlePost(http, version, keepAlive, clientFd, config);
+bool buildResponse(HttpParser& http, int clientFd,
+                   bool& keepAlive, const ServerConfig& config,
+                   CgiHandler& cgi, std::map<int, CgiJob>& cgiJobs)
+{
+    std::string version = http.getVersion();
+    setKeepAlive(http, keepAlive);
 
-    else if (toLower(http.getMethod()) == "delete")
-        return handleDelete(clientFd, version, keepAlive, http.getTarget(), config);
+    const LocationConfig* location =
+        findMatchingLocation(config, http.getTarget(), toUpper(http.getMethod()));
+    if (location != NULL && location->redirectCode != 0)
+        return sendRedirectResponse(http, clientFd, keepAlive, *location);
 
-    return false;
+    bool configuredCgi =
+        isConfiguredCgiRoute(location, http.getTarget());
+
+    if (configuredCgi || cgi.isCGI(http.getTarget()))
+        return startCgiResponse(http, clientFd, keepAlive, config, cgi,
+                                cgiJobs, location, configuredCgi, version);
+
+    return dispatchResponse(http, clientFd, keepAlive, config);
 }

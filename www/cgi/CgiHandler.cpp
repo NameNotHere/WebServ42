@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <utility>
 
@@ -14,17 +15,13 @@ namespace
 
 	long long nowMilliseconds()
 	{
-		struct timespec value;
-		if (clock_gettime(CLOCK_MONOTONIC, &value) == -1)
-			return 0;
-		return static_cast<long long>(value.tv_sec) * 1000
-			+ value.tv_nsec / 1000000;
+		return std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
 	}
 
 	bool setNonBlocking(int fd)
 	{
-		int flags = fcntl(fd, F_GETFL, 0);
-		return flags != -1 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1;
+		return fcntl(fd, F_SETFL, O_NONBLOCK) != -1;
 	}
 
 	std::string scriptDirectory(const std::string& script)
@@ -56,12 +53,11 @@ namespace
 		}
 	}
 
-	void signalProcessGroup(pid_t pid, int signalNumber)
+	void signalCgiProcess(pid_t pid, int signalNumber)
 	{
 		if (pid <= 0)
 			return;
-		if (kill(-pid, signalNumber) == -1)
-			kill(pid, signalNumber);
+		kill(pid, signalNumber);
 	}
 
 	std::string headerValue(const std::map<std::string, std::string>& headers,
@@ -117,37 +113,58 @@ namespace
 		envp.push_back(NULL);
 	}
 
+	[[noreturn]] void terminateCgiChild(int status,
+		std::vector<char*>& envp)
+	{
+	const char* commandText = "exit 127";
+	if (status == 1)
+		commandText = "exit 1";
+	else if (status == 126)
+		commandText = "exit 126";
+	char* command = const_cast<char*>(commandText);
+		char* shellArgv[4];
+		shellArgv[0] = const_cast<char*>("/bin/sh");
+		shellArgv[1] = const_cast<char*>("-c");
+		shellArgv[2] = command;
+		shellArgv[3] = NULL;
+		execve("/bin/sh", shellArgv, envp.data());
+
+		char* fallbackArgv[2];
+		fallbackArgv[0] = const_cast<char*>("/bin/false");
+		fallbackArgv[1] = NULL;
+		while (true)
+			execve("/bin/false", fallbackArgv, envp.data());
+	}
+
 	void executeCgiChild(const std::string& interpreter,
 		const std::string& scriptPath, const std::string& argument,
 		std::vector<char*>& envp, int inputPipe[2], int outputPipe[2])
 	{
-		setpgid(0, 0);
 		if (dup2(inputPipe[0], STDIN_FILENO) == -1
 			|| dup2(outputPipe[1], STDOUT_FILENO) == -1)
-			_exit(1);
+			terminateCgiChild(1, envp);
 		close(inputPipe[0]);
 		close(inputPipe[1]);
 		close(outputPipe[0]);
 		close(outputPipe[1]);
 		if (chdir(scriptDirectory(scriptPath).c_str()) == -1)
-			_exit(126);
+			terminateCgiChild(126, envp);
 
 		char* argv[3];
 		argv[0] = const_cast<char*>(interpreter.c_str());
 		argv[1] = const_cast<char*>(argument.c_str());
 		argv[2] = NULL;
 		execve(interpreter.c_str(), argv, envp.data());
-		_exit(127);
+		terminateCgiChild(127, envp);
 	}
 
 	bool configureParentPipes(pid_t pid, int inputPipe[2], int outputPipe[2])
 	{
 		closeDescriptor(inputPipe[0]);
 		closeDescriptor(outputPipe[1]);
-		setpgid(pid, pid);
 		if (!setNonBlocking(inputPipe[1]) || !setNonBlocking(outputPipe[0]))
 		{
-			signalProcessGroup(pid, SIGKILL);
+			signalCgiProcess(pid, SIGKILL);
 			closeDescriptor(inputPipe[1]);
 			closeDescriptor(outputPipe[0]);
 			while (waitpid(pid, NULL, 0) == -1 && errno == EINTR) {}
@@ -249,7 +266,10 @@ CgiHandler::buildEnvironment(const CGIRequest& request) const
 		for (size_t i = 0; i < key.size(); ++i)
 		{
 			unsigned char c = static_cast<unsigned char>(key[i]);
-			key[i] = c == '-' ? '_' : static_cast<char>(std::toupper(c));
+			if (c == '-')
+				key[i] = '_';
+			else
+				key[i] = static_cast<char>(std::toupper(c));
 		}
 		env[key] = it->second;
 	}
@@ -277,8 +297,9 @@ bool CgiHandler::start(CGIRequest& request, CgiJob& job,
 	std::vector<char*> envp;
 	buildEnvironmentPointers(environment, envStrings, envp);
 	std::string argument = scriptArgument(request.script_path);
-	std::string interpreter = request.interpreter.empty()
-		? _interpreter : request.interpreter;
+	std::string interpreter = _interpreter;
+	if (!request.interpreter.empty())
+		interpreter = request.interpreter;
 	if (!interpreter.empty() && interpreter[0] != '/')
 		interpreter = std::filesystem::absolute(interpreter).string();
 
@@ -333,7 +354,7 @@ void CgiHandler::readOutput(CgiJob& job) const
 		{
 			job.ioError = true;
 			job.errorMessage = "CGI output exceeded the configured limit";
-			signalProcessGroup(job.pid, SIGKILL);
+			signalCgiProcess(job.pid, SIGKILL);
 			closeDescriptor(job.stdoutFd);
 			job.outputEof = true;
 			return;
@@ -352,9 +373,10 @@ void CgiHandler::readOutput(CgiJob& job) const
 void CgiHandler::pipeError(CgiJob& job, bool inputPipe) const
 {
 	job.ioError = true;
-	job.errorMessage = inputPipe
-		? "CGI stdin pipe reported an error"
-		: "CGI stdout pipe reported an error";
+	if (inputPipe)
+		job.errorMessage = "CGI stdin pipe reported an error";
+	else
+		job.errorMessage = "CGI stdout pipe reported an error";
 	if (inputPipe)
 		closeDescriptor(job.stdinFd);
 	else
@@ -372,11 +394,16 @@ void CgiHandler::update(CgiJob& job) const
 		job.timedOut = true;
 		job.terminationSent = true;
 		job.killDeadlineMs = now + KILL_GRACE_MS;
-		signalProcessGroup(job.pid, SIGTERM);
+		if (!job.childReaped)
+			signalCgiProcess(job.pid, SIGTERM);
 	}
-	else if (job.terminationSent && !job.childReaped
-		&& now >= job.killDeadlineMs)
-		signalProcessGroup(job.pid, SIGKILL);
+	else if (job.terminationSent && now >= job.killDeadlineMs)
+	{
+		if (!job.childReaped)
+			signalCgiProcess(job.pid, SIGKILL);
+		closeDescriptor(job.stdoutFd);
+		job.outputEof = true;
+	}
 
 	if (!job.childReaped)
 	{
@@ -421,7 +448,7 @@ void CgiHandler::cancel(CgiJob& job) const
 {
 	if (job.pid > 0 && !job.childReaped)
 	{
-		signalProcessGroup(job.pid, SIGKILL);
+		signalCgiProcess(job.pid, SIGKILL);
 		while (waitpid(job.pid, NULL, 0) == -1 && errno == EINTR) {}
 	}
 	closeDescriptor(job.stdinFd);
