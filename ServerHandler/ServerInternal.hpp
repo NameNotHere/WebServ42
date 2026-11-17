@@ -10,6 +10,7 @@
 namespace ServerInternal
 {
     extern volatile sig_atomic_t shutdownRequested;
+    const size_t DEFAULT_MAX_REQUEST_BODY = 128 * 1024 * 1024;
     const size_t LARGE_POST_THRESHOLD = 8 * 1024 * 1024;
     const size_t MAX_BUFFERED_LARGE_POSTS = 5;
     const int CLIENT_IDLE_TIMEOUT_SECONDS = 60;

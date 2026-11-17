@@ -26,7 +26,6 @@ SRCS		= httpParser/HttpParser.cpp \
 			  ServerHandler/Responder.cpp \
 			  ServerHandler/ServerErrors.cpp \
 			  www/cgi/CgiHandler.cpp \
-			  www/cgi/CgiHelper.cpp \
 			  www/cgi/CgiResponse.cpp \
 			  main.cpp
 

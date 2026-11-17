@@ -49,7 +49,7 @@ namespace
 
     size_t requestMaxBody(int fd, const std::string& rawRequest, std::map<int, ServerConfig>& clientConfigs)
     {
-        size_t maxBody = 0;
+        size_t maxBody = DEFAULT_MAX_REQUEST_BODY;
         size_t firstSpace = rawRequest.find(' ');
         size_t secondSpace = std::string::npos;
         if (firstSpace != std::string::npos)

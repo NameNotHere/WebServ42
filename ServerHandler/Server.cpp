@@ -93,8 +93,6 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
 {
     sockaddr_in clientAddr;
     pollfd client;
-    const unsigned char* octets = reinterpret_cast<const unsigned char*>(&clientAddr.sin_addr);
-    std::ostringstream ip;
 
     socklen_t addrlen = sizeof(clientAddr);
 
@@ -110,16 +108,10 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
         std::cerr << "fcntl(O_NONBLOCK) failed for client\n";
         return;
     }
-    ip << static_cast<unsigned int>(octets[0]) << "."
-       << static_cast<unsigned int>(octets[1]) << "."
-       << static_cast<unsigned int>(octets[2]) << "."
-       << static_cast<unsigned int>(octets[3]);
-
     client.fd = clientFD;
     client.events = POLLIN;
     client.revents = 0;
     clientConfigs[clientFD] = config;
     fds.push_back(client);
     ServerInternal::registerClient(clientFD);
-    std::cout << "Client connected from " << ip.str() << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }

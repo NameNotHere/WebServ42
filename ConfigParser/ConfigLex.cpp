@@ -58,7 +58,6 @@ void expect_and_increase(const std::vector<Token>& tokens, size_t& pos, CONF_TOK
 {
     if (pos >= tokens.size())
         throw std::runtime_error("unexpected end of file");
-    std::cerr << "Expected: " << expected << " | Got: " << tokens[pos].type << " | word: [" << tokens[pos].word << "]" << " | pos: " << pos << std::endl;
     if (tokens[pos].type != expected)
         throw std::runtime_error( std::string("unexpected token at line ") + std::to_string(tokens[pos].line));
     pos++;

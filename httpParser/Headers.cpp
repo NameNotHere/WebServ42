@@ -35,7 +35,6 @@ bool HttpParser::headers(const std::string& request)
     		return false;
 
 		lowerCase(name);
-		lowerCase(value);
 	
 		if (_headers.find(name) != _headers.end())
    			return false;
