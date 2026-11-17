@@ -1,10 +1,8 @@
 #include "Server.hpp"
-#include <cerrno>
+#include <sys/uio.h>
 
 namespace
 {
-    const size_t MAX_COALESCED_OUTPUT = 64 * 1024;
-
     struct OutputSegment
     {
         std::string bytes;
@@ -161,87 +159,59 @@ bool flushPendingOutput(int clientFd)
         {
             if (!segment.isFile)
             {
-                size_t batchSize = 0;
-                size_t batchCount = 0;
+                struct iovec vectors[16];
+                size_t vectorCount = 0;
                 for (std::deque<OutputSegment>::const_iterator it =
                          output->second.segments.begin();
-                     it != output->second.segments.end() && !it->isFile; ++it)
+                     it != output->second.segments.end() && vectorCount < 16;
+                     ++it)
                 {
-                    size_t available = it->bytes.size() - it->offset;
-                    if (available > MAX_COALESCED_OUTPUT - batchSize)
-                    {
-                        batchCount = 0;
+                    if (it->isFile)
                         break;
-                    }
-                    batchSize += available;
-                    ++batchCount;
+                    vectors[vectorCount].iov_base = const_cast<char*>(
+                        it->bytes.data() + it->offset);
+                    vectors[vectorCount].iov_len = it->bytes.size() - it->offset;
+                    ++vectorCount;
                 }
 
-                if (batchCount > 1)
+                struct msghdr message;
+                std::memset(&message, 0, sizeof(message));
+                message.msg_iov = vectors;
+                message.msg_iovlen = vectorCount;
+                ssize_t sent = sendmsg(clientFd, &message, 0);
+                if (sent <= 0)
+                    return false;
+
+                size_t remaining = static_cast<size_t>(sent);
+                while (remaining > 0 && !output->second.segments.empty())
                 {
-                    std::string batch;
-                    batch.reserve(batchSize);
-                    for (std::deque<OutputSegment>::const_iterator it =
-                             output->second.segments.begin();
-                         it != output->second.segments.end() && !it->isFile;
-                         ++it)
-                        batch.append(it->bytes, it->offset,
-                                     it->bytes.size() - it->offset);
-
-                    ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
-                    if (sent <= 0)
+                    OutputSegment& pending = output->second.segments.front();
+                    size_t available = pending.bytes.size() - pending.offset;
+                    if (remaining >= available)
                     {
-                        if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
-                                           || errno == EINTR))
-                            return true;
-                        return false;
+                        remaining -= available;
+                        output->second.segments.pop_front();
                     }
-
-                    size_t remaining = static_cast<size_t>(sent);
-                    while (remaining > 0 && !output->second.segments.empty())
+                    else
                     {
-                        OutputSegment& pending = output->second.segments.front();
-                        size_t available = pending.bytes.size() - pending.offset;
-                        if (remaining >= available)
-                        {
-                            remaining -= available;
-                            output->second.segments.pop_front();
-                        }
-                        else
-                        {
-                            pending.offset += remaining;
-                            remaining = 0;
-                        }
+                        pending.offset += remaining;
+                        remaining = 0;
                     }
-                    return true;
                 }
+                return true;
             }
 
             ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                                 segment.bytes.size() - segment.offset, 0);
             if (sent <= 0)
-            {
-                if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK
-                                   || errno == EINTR))
-                    return true;
                 return false;
-            }
             segment.offset += static_cast<size_t>(sent);
-            if (segment.offset < segment.bytes.size())
-                return true;
-
-            if (segment.isFile)
+            if (segment.offset == segment.bytes.size()
+                && segment.fileRemaining == 0)
             {
-                if (segment.fileRemaining == 0)
-                {
-                    if (segment.fileFd != -1)
-                        close(segment.fileFd);
-                    output->second.segments.pop_front();
-                }
-                continue;
+                close(segment.fileFd);
+                output->second.segments.pop_front();
             }
-
-            output->second.segments.pop_front();
             return true;
         }
 
