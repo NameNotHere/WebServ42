@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "ServerInternal.hpp"
 #include <netdb.h>
 
 namespace
@@ -119,5 +120,6 @@ void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<p
     client.revents = 0;
     clientConfigs[clientFD] = config;
     fds.push_back(client);
+    ServerInternal::registerClient(clientFD);
     std::cout << "Client connected from " << ip.str() << ":" << ntohs(clientAddr.sin_port) << " to port " << config.listen << std::endl;
 }

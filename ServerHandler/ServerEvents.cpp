@@ -6,9 +6,58 @@
 namespace ServerInternal
 {
     volatile sig_atomic_t shutdownRequested = 0;
+    std::map<int, ClientTiming> clientTimings;
     std::set<int> largePostClients;
     std::set<int> largePostWaiters;
     std::set<int> peerClosedClients;
+
+    ClientTiming::ClientTiming()
+        : lastActivity(std::chrono::steady_clock::now()),
+          requestStarted(), requestActive(false)
+    {
+    }
+
+    void registerClient(int fd)
+    {
+        clientTimings[fd] = ClientTiming();
+    }
+
+    void recordClientRead(int fd, bool startsRequest)
+    {
+        std::map<int, ClientTiming>::iterator timing = clientTimings.find(fd);
+        if (timing == clientTimings.end())
+            return;
+        const std::chrono::steady_clock::time_point now =
+            std::chrono::steady_clock::now();
+        timing->second.lastActivity = now;
+        if (startsRequest || !timing->second.requestActive)
+        {
+            timing->second.requestStarted = now;
+            timing->second.requestActive = true;
+        }
+    }
+
+    void recordClientWrite(int fd)
+    {
+        std::map<int, ClientTiming>::iterator timing = clientTimings.find(fd);
+        if (timing != clientTimings.end())
+            timing->second.lastActivity = std::chrono::steady_clock::now();
+    }
+
+    void completeClientRequest(int fd, bool anotherRequestBuffered)
+    {
+        std::map<int, ClientTiming>::iterator timing = clientTimings.find(fd);
+        if (timing == clientTimings.end())
+            return;
+        timing->second.requestActive = anotherRequestBuffered;
+        if (anotherRequestBuffered)
+            timing->second.requestStarted = std::chrono::steady_clock::now();
+    }
+
+    void forgetClient(int fd)
+    {
+        clientTimings.erase(fd);
+    }
 
     void handleShutdownSignal(int)
     {
@@ -28,6 +77,8 @@ using namespace ServerInternal;
 
 namespace
 {
+    bool isListener(int fd, const std::vector<Server>& hosting);
+
     enum PollKind
     {
         POLL_LISTENER,
@@ -55,7 +106,20 @@ namespace
                 if (fds[i].fd == fd)
                     connected = true;
             if (connected && reqs.find(fd) != reqs.end())
+            {
                 largePostClients.insert(fd);
+                // The request starts consuming an active slot from this point.
+                std::map<int, ClientTiming>::iterator timing =
+                    clientTimings.find(fd);
+                if (timing != clientTimings.end())
+                {
+                    const std::chrono::steady_clock::time_point now =
+                        std::chrono::steady_clock::now();
+                    timing->second.lastActivity = now;
+                    timing->second.requestStarted = now;
+                    timing->second.requestActive = true;
+                }
+            }
         }
     }
     void drainCgiInput(CgiHandler& cgi, CgiJob& job)
@@ -78,6 +142,7 @@ namespace
             cgiJobs.erase(job);
         }
         close(fd);
+        forgetClient(fd);
         clearPendingOutput(fd);
         requests.erase(fd);
         configs.erase(fd);
@@ -91,6 +156,47 @@ namespace
                 fds.erase(fds.begin() + i);
                 break;
             }
+        }
+    }
+
+    bool clientHasExpired(int fd,
+                          std::chrono::steady_clock::time_point now)
+    {
+        // These clients are intentionally paused until a large-request slot opens.
+        if (largePostWaiters.count(fd))
+            return false;
+        std::map<int, ClientTiming>::const_iterator timing =
+            clientTimings.find(fd);
+        if (timing == clientTimings.end())
+            return false;
+        if (now - timing->second.lastActivity
+            >= std::chrono::seconds(CLIENT_IDLE_TIMEOUT_SECONDS))
+            return true;
+        if (timing->second.requestActive
+            && now - timing->second.requestStarted
+                >= std::chrono::seconds(CLIENT_REQUEST_TIMEOUT_SECONDS))
+            return true;
+        return false;
+    }
+
+    void removeExpiredClients(
+        const std::vector<Server>& hosting, std::vector<pollfd>& fds,
+        std::map<int, std::string>& requests,
+        std::map<int, ServerConfig>& configs, CgiHandler& cgi,
+        std::map<int, CgiJob>& cgiJobs)
+    {
+        const std::chrono::steady_clock::time_point now =
+            std::chrono::steady_clock::now();
+        size_t i = 0;
+        while (i < fds.size())
+        {
+            int fd = fds[i].fd;
+            if (isListener(fd, hosting) || !clientHasExpired(fd, now))
+            {
+                ++i;
+                continue;
+            }
+            removeClient(fd, fds, requests, configs, cgi, cgiJobs);
         }
     }
 
@@ -125,6 +231,7 @@ namespace
         cgiJobs.clear();
         requests.clear();
         configs.clear();
+        clientTimings.clear();
         largePostClients.clear();
         largePostWaiters.clear();
         peerClosedClients.clear();
@@ -312,7 +419,9 @@ namespace
 
         if (bytesRead > 0)
         {
+            bool startsRequest = reqs[fd].empty();
             reqs[fd].append(buffer, static_cast<size_t>(bytesRead));
+            ServerInternal::recordClientRead(fd, startsRequest);
             runHttpParser(fd, reqs, clientConfigs, cgi, cgiJobs);
         }
 
@@ -407,6 +516,7 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
 
     while (!shutdownRequested)
     {
+        removeExpiredClients(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
         promoteLargePostWaiters(fds, reqs);
         updateClientPollEvents(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
 

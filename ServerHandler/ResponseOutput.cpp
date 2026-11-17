@@ -1,4 +1,5 @@
 #include "Responder.hpp"
+#include "ServerInternal.hpp"
 #include <deque>
 #include <sstream>
 #include <sys/socket.h>
@@ -121,10 +122,11 @@ namespace
         std::string batch = makeCoalescedBatch(output, batchSize);
         ssize_t sent = send(clientFd, batch.data(), batch.size(), 0);
         if (sent < 0)
-            return OUTPUT_FLUSH_PAUSE;
+            return OUTPUT_FLUSH_ERROR;
         if (sent == 0)
             return OUTPUT_FLUSH_ERROR;
 
+        ServerInternal::recordClientWrite(clientFd);
         consumeCoalescedBytes(output, static_cast<size_t>(sent));
         return OUTPUT_FLUSH_PAUSE;
     }
@@ -135,10 +137,11 @@ namespace
         ssize_t sent = send(clientFd, segment.bytes.data() + segment.offset,
                             segment.bytes.size() - segment.offset, 0);
         if (sent < 0)
-            return OUTPUT_FLUSH_PAUSE;
+            return OUTPUT_FLUSH_ERROR;
         if (sent == 0)
             return OUTPUT_FLUSH_ERROR;
 
+        ServerInternal::recordClientWrite(clientFd);
         segment.offset += static_cast<size_t>(sent);
         if (segment.offset < segment.bytes.size())
             return OUTPUT_FLUSH_PAUSE;

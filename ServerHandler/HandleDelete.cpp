@@ -9,13 +9,13 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
     if (!decodeUriPath(target, decodedTarget))
         return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
 
-    if (target.find("..") != std::string::npos)
+    if (decodedTarget.find("..") != std::string::npos)
     {
         sendErrorResponse(clientFd, version, keepAlive, 400, &config);
         return false;
     }
 
-    const LocationConfig* location = findMatchingLocation(config, target, "DELETE");
+    const LocationConfig* location = findMatchingLocation(config, decodedTarget, "DELETE");
     if (!isMethodAllowed(config, location, "DELETE"))
     {
         sendErrorResponse(
@@ -25,7 +25,30 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         return false;
     }
 
-    const std::string filePath = resolveRequestedPath(config.root, target);
+    const std::string* root = &config.root;
+    std::string relativeTarget = decodedTarget;
+    if (location != NULL)
+    {
+        if (!location->root.empty())
+            root = &location->root;
+        if (location->path.compare(0, 2, "*.") != 0
+            && relativeTarget.compare(0, location->path.size(),
+                                      location->path) == 0)
+        {
+            relativeTarget = relativeTarget.substr(location->path.size());
+            if (relativeTarget.empty())
+                relativeTarget = "/";
+            else if (relativeTarget[0] != '/')
+                relativeTarget.insert(0, "/");
+        }
+    }
+
+    std::string filePath = *root;
+    if (filePath.empty())
+        filePath = ".";
+    if (filePath[filePath.size() - 1] == '/')
+        filePath.erase(filePath.size() - 1);
+    filePath += relativeTarget;
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
     {

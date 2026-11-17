@@ -31,7 +31,7 @@ std::string statusText(int code)
         case 405: return "Method Not Allowed";
         case 413: return "Content Too Large";
         case 500: return "Internal Server Error";
-        case 501: return "Method Not Implemented";
+        case 501: return "Not Implemented";
         case 505: return "HTTP Version Not Supported";
         default: return "";
     }

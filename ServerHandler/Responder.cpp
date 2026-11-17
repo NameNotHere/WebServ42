@@ -1,8 +1,35 @@
 #include "Server.hpp"
 #include "Responder.hpp"
+#include <cerrno>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace
 {
+    int cgiScriptErrorStatus(const std::string& path)
+    {
+        struct stat info;
+        if (stat(path.c_str(), &info) == -1)
+        {
+            if (errno == EACCES || errno == EPERM)
+                return 403;
+            if (errno == ENOENT || errno == ENOTDIR)
+                return 404;
+            return 500;
+        }
+        if (!S_ISREG(info.st_mode))
+            return 404;
+        if (access(path.c_str(), R_OK) == -1)
+        {
+            if (errno == EACCES || errno == EPERM)
+                return 403;
+            if (errno == ENOENT || errno == ENOTDIR)
+                return 404;
+            return 500;
+        }
+        return 0;
+    }
+
     bool targetHasExtension(const std::string& target,
                            const std::string& extension)
     {
@@ -89,7 +116,7 @@ namespace
         {
             size_t lastSlash = scriptUri.find_last_of('/');
             if (lastSlash != std::string::npos)
-                scriptPathUri = scriptUri.substr(lastSlash + 1);
+                scriptPathUri = "/" + scriptUri.substr(lastSlash + 1);
         }
 
         request.script_path = resolveRequestedPath(*root, scriptPathUri);
@@ -121,6 +148,10 @@ namespace
             return sendErrorResponse(clientFd, version, keepAlive, 405, &config, extraHeaders);
         }
         CGIRequest request = makeCgiRequest(http, config, location, configuredCgi, version);
+        int scriptError = cgiScriptErrorStatus(request.script_path);
+        if (scriptError != 0)
+            return sendErrorResponse(clientFd, version, keepAlive,
+                                     scriptError, &config);
         CgiJob job;
         unsigned int timeoutSeconds = 5;
 

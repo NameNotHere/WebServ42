@@ -38,6 +38,7 @@ namespace
                 sendErrorResponse(fd, "HTTP/1.1", false, 400, serverConfig);
                 closeAfterPendingOutput(fd);
                 reqs.erase(fd);
+                ServerInternal::completeClientRequest(fd, false);
                 clientConfigs.erase(fd);
                 largePostClients.erase(fd);
                 largePostWaiters.erase(fd);
@@ -77,6 +78,7 @@ namespace
         size_t requestLen = http.getRequestLength();
         bool responseBuilt = buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
         reqs[fd].erase(0, requestLen);
+        ServerInternal::completeClientRequest(fd, !reqs[fd].empty());
         if (cgiJobs.find(fd) == cgiJobs.end())
             largePostClients.erase(fd);
 
@@ -91,6 +93,7 @@ namespace
         {
             closeAfterPendingOutput(fd);
             reqs.erase(fd);
+            ServerInternal::completeClientRequest(fd, false);
             clientConfigs.erase(fd);
             return false;
         }
@@ -145,6 +148,7 @@ namespace
         sendErrorResponse(fd, "HTTP/1.1", false, code, serverConfig, extraHeaders);
         closeAfterPendingOutput(fd);
         reqs.erase(fd);
+        ServerInternal::completeClientRequest(fd, false);
         clientConfigs.erase(fd);
         largePostClients.erase(fd);
         largePostWaiters.erase(fd);

@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cerrno>
 
 std::string GetEnding(const std::string& path);
 
@@ -16,10 +17,20 @@ namespace
 
     std::map<std::string, CachedStaticFile> smallFileCache;
 
+    int fileErrorStatus(int errorNumber)
+    {
+        if (errorNumber == EACCES || errorNumber == EPERM)
+            return 403;
+        if (errorNumber == ENOENT || errorNumber == ENOTDIR)
+            return 404;
+        return 500;
+    }
+
     bool readSmallFile(const std::string& path, const struct stat& info,
                        const std::string& version, std::string& header,
-                       std::string& body)
+                       std::string& body, int& errorStatus)
     {
+        errorStatus = 500;
         std::map<std::string, CachedStaticFile>::iterator cached =
             smallFileCache.find(path);
         if (cached == smallFileCache.end() || cached->second.size != info.st_size
@@ -27,7 +38,10 @@ namespace
         {
             int fd = open(path.c_str(), O_RDONLY);
             if (fd == -1)
+            {
+                errorStatus = fileErrorStatus(errno);
                 return false;
+            }
 
             CachedStaticFile entry;
             entry.size = info.st_size;
@@ -126,11 +140,19 @@ namespace
                        const struct stat& info, const std::string& version,
                        bool keepAlive, const ServerConfig& config)
     {
+        if (access(path.c_str(), R_OK) == -1)
+        {
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
+            return false;
+        }
+
         std::string header;
         std::string body;
-        if (!readSmallFile(path, info, version, header, body))
+        int errorStatus = 500;
+        if (!readSmallFile(path, info, version, header, body, errorStatus))
         {
-            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return false;
         }
         if (keepAlive)
@@ -149,7 +171,8 @@ namespace
         const int fileFd = open(path.c_str(), O_RDONLY);
         if (fileFd == -1)
         {
-            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return std::cout << "Cant open fd\n", false;
         }
 
@@ -180,7 +203,8 @@ namespace
         struct stat info;
         if (stat(path.c_str(), &info) == -1)
         {
-            sendErrorResponse(clientFd, version, keepAlive, 404, &config);
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return false;
         }
         if (S_ISDIR(info.st_mode) && !decodedTarget.empty()
