@@ -6,7 +6,7 @@
 
 namespace
 {
-    int cgiScriptErrorStatus(const std::string& path)
+    int automaticCgiScriptErrorStatus(const std::string& path)
     {
         struct stat info;
         if (stat(path.c_str(), &info) == -1)
@@ -148,10 +148,13 @@ namespace
             return sendErrorResponse(clientFd, version, keepAlive, 405, &config, extraHeaders);
         }
         CGIRequest request = makeCgiRequest(http, config, location, configuredCgi, version);
-        int scriptError = cgiScriptErrorStatus(request.script_path);
-        if (scriptError != 0)
-            return sendErrorResponse(clientFd, version, keepAlive,
-                                     scriptError, &config);
+        if (!configuredCgi)
+        {
+            int scriptError = automaticCgiScriptErrorStatus(request.script_path);
+            if (scriptError != 0)
+                return sendErrorResponse(clientFd, version, keepAlive,
+                                         scriptError, &config);
+        }
         CgiJob job;
         unsigned int timeoutSeconds = 5;
 
