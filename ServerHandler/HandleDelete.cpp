@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cstdio>
 
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config)
 {
@@ -8,13 +9,13 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
     if (!decodeUriPath(target, decodedTarget))
         return sendErrorResponse(clientFd, version, keepAlive, 400, &config);
 
-    if (target.find("..") != std::string::npos)
+    if (decodedTarget.find("..") != std::string::npos)
     {
         sendErrorResponse(clientFd, version, keepAlive, 400, &config);
         return false;
     }
 
-    const LocationConfig* location = findMatchingLocation(config, target, "DELETE");
+    const LocationConfig* location = findMatchingLocation(config, decodedTarget, "DELETE");
     if (!isMethodAllowed(config, location, "DELETE"))
     {
         sendErrorResponse(
@@ -24,7 +25,30 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         return false;
     }
 
-    const std::string filePath = resolveRequestedPath(config.root, target);
+    const std::string* root = &config.root;
+    std::string relativeTarget = decodedTarget;
+    if (location != NULL)
+    {
+        if (!location->root.empty())
+            root = &location->root;
+        if (location->path.compare(0, 2, "*.") != 0
+            && relativeTarget.compare(0, location->path.size(),
+                                      location->path) == 0)
+        {
+            relativeTarget = relativeTarget.substr(location->path.size());
+            if (relativeTarget.empty())
+                relativeTarget = "/";
+            else if (relativeTarget[0] != '/')
+                relativeTarget.insert(0, "/");
+        }
+    }
+
+    std::string filePath = *root;
+    if (filePath.empty())
+        filePath = ".";
+    if (filePath[filePath.size() - 1] == '/')
+        filePath.erase(filePath.size() - 1);
+    filePath += relativeTarget;
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)
     {
@@ -41,12 +65,15 @@ bool handleDelete(int clientFd, const std::string& version, bool keepAlive, cons
         sendErrorResponse(clientFd, version, keepAlive, 403, &config);
         return false;
     }
-    if (unlink(filePath.c_str()) == 0)
+    if (std::remove(filePath.c_str()) == 0)
     {
         std::ostringstream out;
         out << version << " 204 " << statusText(204) << "\r\n";
         out << "Content-Length: 0\r\n";
-        out << (keepAlive ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
+        if (keepAlive)
+            out << "Connection: keep-alive\r\n";
+        else
+            out << "Connection: close\r\n";
         out << "\r\n";
         std::string resp = out.str();
         sendAll(clientFd, resp.data(), resp.size());
@@ -84,9 +111,6 @@ bool isMethodAllowed(const ServerConfig& config, const LocationConfig* location,
         }
         return false;
     }
-
-    // Without an explicit method list, locations are read-only by default.
-    // POST and DELETE must be enabled in the location or server config.
     return method == "GET";
 }
 
@@ -102,7 +126,6 @@ bool decodeUriPath(const std::string& encoded, std::string& decoded)
             continue;
         }
 
-        // A percent sign must be followed by two hexadecimal digits.
         if (i + 2 >= encoded.size())
             return false;
 
@@ -113,14 +136,11 @@ bool decodeUriPath(const std::string& encoded, std::string& decoded)
         if (end == hex || *end != '\0')
             return false;
 
-        // Reject decoded NUL bytes and encoded path separators
-        // to avoid ambiguous path handling.
         if (value == 0 || value == '/' || value == '\\')
             return false;
 
         decoded += static_cast<char>(value);
         i += 2;
     }
-
     return true;
 }

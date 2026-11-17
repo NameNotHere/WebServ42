@@ -51,35 +51,9 @@ const LocationConfig* findMatchingLocation(const ServerConfig& config, const std
     if (bestPrefix != NULL
         && isMethodAllowed(config, bestPrefix, method))
         return bestPrefix;
-    return bestExtension != NULL ? bestExtension : bestPrefix;
-}
-
-bool isPostAllowed(const ServerConfig& config, const LocationConfig& location)
-{
-    if (!location.allowed_methods.empty())
-    {
-        for (size_t i = 0; i < location.allowed_methods.size(); ++i)
-        {
-            if (location.allowed_methods[i] == "POST")
-                return true;
-        }
-
-        return false;
-    }
-
-    if (!config.allowed_methods.empty())
-    {
-        for (size_t i = 0; i < config.allowed_methods.size(); ++i)
-        {
-            if (config.allowed_methods[i] == POST)
-                return true;
-        }
-
-        return false;
-    }
-
-    // No explicit permission configured.
-    return false;
+    if (bestExtension != NULL)
+        return bestExtension;
+    return bestPrefix;
 }
 
 bool getUploadFilename(const std::string& target, const LocationConfig& location, std::string& filename)
@@ -106,8 +80,10 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
             endpoint.erase(endpoint.size() - 1);
 
         size_t slash = endpoint.find_last_of('/');
-        filename = slash == std::string::npos
-            ? endpoint : endpoint.substr(slash + 1);
+        if (slash == std::string::npos)
+            filename = endpoint;
+        else
+            filename = endpoint.substr(slash + 1);
     }
 
     // Only allow a single filename, not a path.
@@ -123,18 +99,20 @@ bool getUploadFilename(const std::string& target, const LocationConfig& location
 
 int openUploadDirectory(const LocationConfig& location)
 {
-    const std::string& directory =
-        location.uploadDir.empty() ? location.root : location.uploadDir;
+    const std::string* directory = &location.uploadDir;
+    if (directory->empty())
+        directory = &location.root;
 
-    return open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+    return open(directory->c_str(), O_RDONLY | O_DIRECTORY);
 }
 
 int openUploadFile(int dirFd, const std::string& filename, bool& existed)
 {
+    const std::string filePath = "/proc/self/fd/"
+        + std::to_string(dirFd) + "/" + filename;
     struct stat info;
 
-    if (fstatat(dirFd, filename.c_str(), &info,
-                AT_SYMLINK_NOFOLLOW) == 0)
+    if (stat(filePath.c_str(), &info) == 0)
     {
         if (!S_ISREG(info.st_mode))
         {
@@ -152,9 +130,8 @@ int openUploadFile(int dirFd, const std::string& filename, bool& existed)
         existed = false;
     }
 
-    return openat(
-        dirFd,
-        filename.c_str(),
+    return open(
+        filePath.c_str(),
         O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW,
         0644
     );
@@ -172,12 +149,11 @@ bool writeRequestBody(int fileFd, const std::string& body)
             body.size() - written
         );
 
-        if (result <= 0) //removed errno if statement as that is forbidden for server behavior
+        if (result <= 0)
             return false;
 
         written += static_cast<size_t>(result);
     }
-
     return true;
 }
 
@@ -211,9 +187,6 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
         return 500;
     }
 
-    std::cerr << "DEBUG: opened file successfully, body size = "
-          << body.size() << '\n';
-
     bool success = writeRequestBody(fileFd, body);
 
     if (!success)
@@ -227,7 +200,9 @@ int saveUploadedFile(const LocationConfig& location, const std::string& filename
     if (!success)
         return 500;
 
-    return existed ? 200 : 201;
+    if (existed)
+        return 200;
+    return 201;
 }
 
 bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, int status)
@@ -249,9 +224,10 @@ bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, 
 
     response << version << " " << status << " " << reason << "\r\n";
     response << "Content-Length: 0\r\n";
-    response << (keepAlive
-        ? "Connection: keep-alive\r\n"
-        : "Connection: close\r\n");
+    if (keepAlive)
+        response << "Connection: keep-alive\r\n";
+    else
+        response << "Connection: close\r\n";
     response << "\r\n";
 
     std::string output = response.str();
@@ -261,8 +237,7 @@ bool sendPostResponse(int clientFd, const std::string& version, bool keepAlive, 
 
 bool handlePost(const HttpParser& http, const std::string& version, bool keepAlive, int clientFd, const ServerConfig& config)
 {
-    const LocationConfig* location =
-        findMatchingLocation(config, http.getTarget(), "POST");
+    const LocationConfig* location = findMatchingLocation(config, http.getTarget(), "POST");
 
     if (location == NULL)
     {
@@ -271,10 +246,9 @@ bool handlePost(const HttpParser& http, const std::string& version, bool keepAli
 
     if (!isMethodAllowed(config, location, "POST"))
     {
-        return sendErrorResponse(
-            clientFd, version, keepAlive, 405, &config,
-            std::vector<std::pair<std::string, std::string> >(1,
-                std::make_pair("Allow", allowHeaderValue(config, location))));
+        return sendErrorResponse(clientFd, version, keepAlive, 405, &config,
+                                 std::vector<std::pair<std::string, std::string>
+                                 > (1,std::make_pair("Allow", allowHeaderValue(config, location))));
     }
 
     std::string filename;

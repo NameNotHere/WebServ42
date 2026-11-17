@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cerrno>
 
 std::string GetEnding(const std::string& path);
 
@@ -16,10 +17,20 @@ namespace
 
     std::map<std::string, CachedStaticFile> smallFileCache;
 
+    int fileErrorStatus(int errorNumber)
+    {
+        if (errorNumber == EACCES || errorNumber == EPERM)
+            return 403;
+        if (errorNumber == ENOENT || errorNumber == ENOTDIR)
+            return 404;
+        return 500;
+    }
+
     bool readSmallFile(const std::string& path, const struct stat& info,
                        const std::string& version, std::string& header,
-                       std::string& body)
+                       std::string& body, int& errorStatus)
     {
+        errorStatus = 500;
         std::map<std::string, CachedStaticFile>::iterator cached =
             smallFileCache.find(path);
         if (cached == smallFileCache.end() || cached->second.size != info.st_size
@@ -27,7 +38,10 @@ namespace
         {
             int fd = open(path.c_str(), O_RDONLY);
             if (fd == -1)
+            {
+                errorStatus = fileErrorStatus(errno);
                 return false;
+            }
 
             CachedStaticFile entry;
             entry.size = info.st_size;
@@ -83,8 +97,7 @@ namespace
         return location;
     }
 
-    bool sendDirectoryRedirect(int clientFd, const std::string& version,
-                               const std::string& decodedTarget)
+    bool sendDirectoryRedirect(int clientFd, const std::string& version, const std::string& decodedTarget)
     {
         std::ostringstream response;
         response << version << " 301 Moved Permanently\r\n"
@@ -100,10 +113,9 @@ namespace
                                const LocationConfig* location,
                                const ServerConfig& config)
     {
-        const std::string& root =
-            (location != NULL && !location->root.empty())
-                ? location->root
-                : config.root;
+        const std::string* root = &config.root;
+        if (location != NULL && !location->root.empty())
+            root = &location->root;
 
         std::string relativeTarget = decodedTarget;
         if (location != NULL && location->path.compare(0, 2, "*.") != 0)
@@ -115,7 +127,9 @@ namespace
                 relativeTarget.insert(0, "/");
         }
 
-        std::string path = root.empty() ? "." : root;
+        std::string path = *root;
+        if (path.empty())
+            path = ".";
         if (!path.empty() && path[path.size() - 1] == '/')
             path.erase(path.size() - 1);
         path += relativeTarget;
@@ -126,15 +140,25 @@ namespace
                        const struct stat& info, const std::string& version,
                        bool keepAlive, const ServerConfig& config)
     {
-        std::string header;
-        std::string body;
-        if (!readSmallFile(path, info, version, header, body))
+        if (access(path.c_str(), R_OK) == -1)
         {
-            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return false;
         }
-        header += keepAlive ? "Connection: keep-alive\r\n\r\n"
-                            : "Connection: close\r\n\r\n";
+
+        std::string header;
+        std::string body;
+        int errorStatus = 500;
+        if (!readSmallFile(path, info, version, header, body, errorStatus))
+        {
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
+            return false;
+        }
+        if (keepAlive)
+            header += "Connection: keep-alive\r\n\r\n";
+        else
+            header += "Connection: close\r\n\r\n";
         sendAll(clientFd, header.data(), header.size());
         sendAll(clientFd, body.data(), body.size());
         return true;
@@ -147,7 +171,8 @@ namespace
         const int fileFd = open(path.c_str(), O_RDONLY);
         if (fileFd == -1)
         {
-            sendErrorResponse(clientFd, version, keepAlive, 500, &config);
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return std::cout << "Cant open fd\n", false;
         }
 
@@ -155,8 +180,10 @@ namespace
         response << version << " 200 " << statusText(200) << "\r\n";
         response << "Content-Length: " << info.st_size << "\r\n";
         response << "Content-Type: " << GetEnding(path) << "\r\n";
-        response << (keepAlive ? "Connection: keep-alive\r\n"
-                               : "Connection: close\r\n");
+        if (keepAlive)
+            response << "Connection: keep-alive\r\n";
+        else
+            response << "Connection: close\r\n";
         response << "\r\n";
 
         const std::string header = response.str();
@@ -176,7 +203,8 @@ namespace
         struct stat info;
         if (stat(path.c_str(), &info) == -1)
         {
-            sendErrorResponse(clientFd, version, keepAlive, 404, &config);
+            int errorStatus = fileErrorStatus(errno);
+            sendErrorResponse(clientFd, version, keepAlive, errorStatus, &config);
             return false;
         }
         if (S_ISDIR(info.st_mode) && !decodedTarget.empty()
@@ -293,6 +321,5 @@ bool handleGet(const HttpParser& http, const std::string& version, bool keepAliv
         else
             path += index;
     }
-    return serveGetFile(clientFd, path, decodedTarget, version, keepAlive,
-                        config);
+    return serveGetFile(clientFd, path, decodedTarget, version, keepAlive, config);
 }

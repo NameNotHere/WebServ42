@@ -221,7 +221,7 @@ else:
 
 print(paint("bold", "  Handling failures and event-loop responsiveness"))
 missing_raw = request_bytes("GET", "/cgi/.suite_missing_script.py")
-run("Missing CGI script returns server error", missing_raw, 500, why="A CGI execution failure should become an HTTP 500 response.")
+run("Missing CGI script returns HTTP 404", missing_raw, 404, why="A requested CGI script that does not exist should return HTTP 404.")
 timeout_raw = request_bytes("GET", "/cgi/test.py?sleep=6")
 run("CGI timeout is terminated and reported", timeout_raw, 500, why="The configured five-second CGI timeout should terminate this six-second script and return HTTP 500.")
 
