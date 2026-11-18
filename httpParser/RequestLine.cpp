@@ -35,15 +35,12 @@ HttpParser::RequestStatus HttpParser::checkMethod(const std::string& request)
 	if(!validChar(method))
 		return REQUEST_BAD;
 
-	std::string lowerMethod = method;
-	lowerCase(lowerMethod);
-
-	if (lowerMethod == "head")
+	if (method == "HEAD")
 		return REQUEST_METHOD_NOT_ALLOWED;
 
-	if (lowerMethod != "get"    &&
-		lowerMethod != "post"   &&
-		lowerMethod != "delete"  )
+	if (method != "GET"    &&
+		method != "POST"   &&
+		method != "DELETE"  )
 		return  REQUEST_METHOD_NOT_IMPLEMENTED;
 	
 	_method = method;

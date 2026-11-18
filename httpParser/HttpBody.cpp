@@ -2,7 +2,7 @@
 #include <vector>
 #include <utility>
 
-HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBody)
+HttpParser::BodyStatus HttpParser::body(std::string& request, size_t maxBody)
 {
 	_body.clear();
 	size_t start = request.find("\r\n\r\n");
@@ -52,7 +52,12 @@ HttpParser::BodyStatus HttpParser::body(const std::string& request, size_t maxBo
 			return BODY_INCOMPLETE;
 		}
 		_requestLength = bodyStart + contentLength;
-		_body = request.substr(bodyStart, contentLength);
+		std::string trailing = request.substr(_requestLength);
+		_body.swap(request);
+		_body.erase(0, bodyStart);
+		_body.resize(contentLength);
+		request.swap(trailing);
+		_requestBufferConsumed = true;
 		return BODY_VALID;
 	}
 	_requestLength = start + 4;

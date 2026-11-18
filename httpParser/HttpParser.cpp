@@ -1,9 +1,10 @@
 #include "HttpParser.hpp"
 #include <utility>
 
-HttpParser::RequestStatus HttpParser::parseHttpRequest(const std::string& request, size_t maxBody)
+HttpParser::RequestStatus HttpParser::parseHttpRequest(std::string& request, size_t maxBody)
 {
     _headers.clear();
+    _requestBufferConsumed = false;
 
     RequestStatus requestStatus = requestLine(request);
 
@@ -72,6 +73,11 @@ size_t HttpParser::getRequestLength() const
     return _requestLength;
 }
 
+bool HttpParser::requestBufferConsumed() const
+{
+    return _requestBufferConsumed;
+}
+
 const std::string& HttpParser::getBody() const
 {
 	return _body;
@@ -92,10 +98,12 @@ const std::map<std::string, std::string>& HttpParser::getHeaders() const
     return _headers;
 }
 
-HttpParser::HttpParser() : _requestLength(0){}
+HttpParser::HttpParser() : _requestLength(0), _requestBufferConsumed(false){}
 
 HttpParser::HttpParser(const HttpParser& other)
-    : _requestLength(other._requestLength), _method(other._method), _target(other._target), _version(other._version){}
+    : _requestLength(other._requestLength), _requestBufferConsumed(other._requestBufferConsumed),
+      _method(other._method), _target(other._target), _version(other._version), _body(other._body),
+      _portNum(other._portNum), _headers(other._headers){}
 
 HttpParser& HttpParser::operator=(const HttpParser& other)
 {
@@ -105,6 +113,10 @@ HttpParser& HttpParser::operator=(const HttpParser& other)
 		_target = other._target;
 		_version = other._version;
 		_requestLength = other._requestLength;
+		_requestBufferConsumed = other._requestBufferConsumed;
+		_body = other._body;
+		_portNum = other._portNum;
+		_headers = other._headers;
 	}
 	return *this;
 }

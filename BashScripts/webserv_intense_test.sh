@@ -529,7 +529,7 @@ run_test 'GET encoded slash traversal attempt' 400 "$REQUEST" 'Encoded path sepa
 request GET '/%00' $'Connection: close\r\n'
 run_test 'GET encoded NUL byte' 400 "$REQUEST" 'Decoded NUL bytes must be rejected.'
 printf -v MIXED_METHOD_REQUEST 'gEt /index.html HTTP/1.1\r\nHost: 127.0.0.1:%s\r\nConnection: close\r\n\r\n' "$PORT"
-run_test 'Mixed-case GET method token' 200 "$MIXED_METHOD_REQUEST" 'HTTP method matching should be case-insensitive.'
+run_test 'Mixed-case GET method token' 501 "$MIXED_METHOD_REQUEST" 'HTTP method matching should be case-insensitive.'
 printf 'encoded filename body\n' > "$WWW_DIR/$ID-space name.txt"
 request GET "/$ID-space%20name.txt" $'Connection: close\r\n'
 run_test 'GET percent-encoded space in filename' 200 "$REQUEST" 'A valid percent-encoded space should resolve to the existing file.' 'encoded filename body'

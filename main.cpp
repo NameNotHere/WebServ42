@@ -49,7 +49,7 @@ int main(int argc, char** argv)
         if (hosting.empty())
             return std::cerr << "No server configured\n", 1;
         std::vector<pollfd> fds = createPollFds(hosting);
-        runEventLoop(hosting, fds, reqs);
+        bool eventLoopSucceeded = runEventLoop(hosting, fds, reqs);
         for (size_t i = 0; i < hosting.size(); ++i)
         {
             if (hosting[i].serverFD != -1)
@@ -58,6 +58,8 @@ int main(int argc, char** argv)
                 hosting[i].serverFD = -1;
             }
         }
+        if (!eventLoopSucceeded)
+            return 1;
     }                                           
     catch (const std::exception& e)             
     {                                           

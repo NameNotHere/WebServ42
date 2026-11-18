@@ -35,7 +35,7 @@ struct Server
 };
 
 void Init(Server& server);
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
+bool runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds, std::map<int, std::string> &reqs);
 void handleNewConnection(int serverFD, const ServerConfig& config, std::vector<pollfd>& fds, std::map<int, ServerConfig>& clientConfigs);
 std::vector<pollfd> createPollFds(const std::vector<Server>& hosting);
 void runHttpParser(int fd, std::map<int, std::string>& reqs,std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,std::map<int, CgiJob>& cgiJobs);

@@ -1,5 +1,6 @@
 #include "Server.hpp"
 #include "ServerInternal.hpp"
+#include <cerrno>
 #include <set>
 #include <netdb.h>
 
@@ -507,12 +508,13 @@ namespace
     }
 }
 
-void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
+bool runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
                   std::map<int, std::string>& reqs)
 {
     std::map<int, ServerConfig> clientConfigs;
     std::map<int, CgiJob> cgiJobs;
     CgiHandler cgi("/usr/bin/python3", 5);
+    bool pollFailed = false;
 
     while (!shutdownRequested)
     {
@@ -531,7 +533,11 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         {
             if (shutdownRequested)
                 break;
-            std::cerr << "poll() failed\n";
+            if (errno == EINTR)
+                continue;
+            int pollError = errno;
+            std::cerr << "poll() failed: " << std::strerror(pollError) << '\n';
+            pollFailed = true;
             break;
         }
         if (shutdownRequested)
@@ -546,4 +552,5 @@ void runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         completeCgiJobs(cgi, cgiJobs, reqs, clientConfigs, fds);
     }
     cleanupEventLoop(hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
+    return !pollFailed;
 }

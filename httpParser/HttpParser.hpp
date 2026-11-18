@@ -8,6 +8,7 @@
 class HttpParser {
 private:
 	size_t      _requestLength;
+	bool        _requestBufferConsumed;
 	std::string _method;
 	std::string _target;
 	std::string _version;
@@ -46,7 +47,7 @@ public:
 	~HttpParser();
 	
 	// Request Line
-	RequestStatus parseHttpRequest(const std::string& request, size_t maxBody = 0);
+	RequestStatus parseHttpRequest(std::string& request, size_t maxBody = 0);
 	RequestStatus requestLine(const std::string& request);
 	RequestStatus checkMethod(const std::string& request);
 	bool checkTarget(const std::string& request);
@@ -59,6 +60,7 @@ public:
 	std::string takeBody();
 	const std::string& getPortNum() const;
 	size_t getRequestLength() const;
+	bool requestBufferConsumed() const;
 	// Headers
 	bool headers(const std::string& request);
 	void ftTrim(std::string& value);
@@ -79,7 +81,7 @@ public:
 	const std::map<std::string, std::string>& getHeaders() const;
 
 	// Body
-	BodyStatus body(const std::string& request, size_t maxBody = 0);
+	BodyStatus body(std::string& request, size_t maxBody = 0);
 	BodyStatus transferEncoding(const std::string& request, size_t bodyStart, size_t& bodyLength, size_t maxBody = 0);
 	bool convertBytes(std::string& bytes, size_t& digit);
 };

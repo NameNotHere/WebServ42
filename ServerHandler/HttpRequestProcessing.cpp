@@ -77,7 +77,8 @@ namespace
     {
         size_t requestLen = http.getRequestLength();
         bool responseBuilt = buildResponse(http, fd, keepAlive, clientConfigs.at(fd), cgi, cgiJobs);
-        reqs[fd].erase(0, requestLen);
+        if (!http.requestBufferConsumed())
+            reqs[fd].erase(0, requestLen);
         ServerInternal::completeClientRequest(fd, !reqs[fd].empty());
         if (cgiJobs.find(fd) == cgiJobs.end())
             largePostClients.erase(fd);
