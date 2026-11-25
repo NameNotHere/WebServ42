@@ -5,31 +5,31 @@ CXXFLAGS    = -O3 -Wall -Wextra -Werror -I. -MMD -MP
 
 OBJ_DIR		= obj
 
-SRCS		= httpParser/HttpParser.cpp \
-			  httpParser/RequestLine.cpp \
-			  httpParser/HttpBody.cpp \
+SRCS		= main.cpp \
 			  httpParser/Headers.cpp \
-			  httpParser/HeaderUtils.cpp \
-			  httpParser/HeaderValues.cpp \
-			  httpParser/ContentType.cpp \
-			  ConfigParser/ConfigDirectiveParser.cpp \
-			  ConfigParser/ConfigParser.cpp \
-			  ConfigParser/ConfigLex.cpp \
-			  ServerHandler/core/Server.cpp \
-			  ServerHandler/events/ServerEvents.cpp \
-			  ServerHandler/events/ServerClientState.cpp \
-			  ServerHandler/events/ServerPollEvents.cpp \
-			  ServerHandler/core/HttpRequestProcessing.cpp \
-			  ServerHandler/handlers/HandleGet.cpp \
-			  ServerHandler/handlers/HandleDelete.cpp \
-			  ServerHandler/handlers/HandlePost.cpp \
-			  ServerHandler/responses/ResponseOutput.cpp \
-			  ServerHandler/responses/ResponseUtils.cpp \
-			  ServerHandler/responses/Responder.cpp \
-			  ServerHandler/responses/ServerErrors.cpp \
 			  www/cgi/CgiHandler.cpp \
+			  httpParser/HttpBody.cpp \
 			  www/cgi/CgiResponse.cpp \
-			  main.cpp
+			  httpParser/HttpParser.cpp \
+			  httpParser/RequestLine.cpp \
+			  httpParser/HeaderUtils.cpp \
+			  httpParser/ContentType.cpp \
+			  ConfigParser/ConfigLex.cpp \
+			  httpParser/HeaderValues.cpp \
+			  ConfigParser/ConfigParser.cpp \
+			  ServerHandler/core/Server.cpp \
+			  ServerHandler/handlers/HandleGet.cpp \
+			  ServerHandler/events/ServerEvents.cpp \
+			  ServerHandler/handlers/HandlePost.cpp \
+			  ServerHandler/responses/Responder.cpp \
+			  ConfigParser/ConfigDirectiveParser.cpp \
+			  ServerHandler/handlers/HandleDelete.cpp \
+			  ServerHandler/responses/ServerErrors.cpp \
+			  ServerHandler/events/ServerPollEvents.cpp \
+			  ServerHandler/responses/ResponseUtils.cpp \
+			  ServerHandler/events/ServerClientState.cpp \
+			  ServerHandler/responses/ResponseOutput.cpp \
+			  ServerHandler/core/HttpRequestProcessing.cpp
 
 OBJS 		= $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
 DEPS 		= $(OBJS:.o=.d)
