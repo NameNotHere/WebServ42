@@ -9,4 +9,4 @@
 - Check all files again for any weird shit
 - No destructor, assignment operator overload in cgiHandler.hpp/.cpp
 - An empty CGI request body omits CONTENT_LENGTH. The CGI environment sets it only when the body is nonempty.
-
+- A cgi example maybe
