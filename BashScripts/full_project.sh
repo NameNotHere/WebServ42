@@ -7,7 +7,7 @@ set -u
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 HTTP_SUITE="$ROOT_DIR/webserv_intense_test.sh"
 CGI_SUITE="$ROOT_DIR/cgi_intense_test.sh"
-BASE_URL="${BASE_URL:-http://127.0.0.1:2020}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 AUTHORITY="${BASE_URL#*://}"
 AUTHORITY="${AUTHORITY%%/*}"
 if [[ "$AUTHORITY" == *:* ]]; then

@@ -1,11 +1,11 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include "../httpParser/HttpParser.hpp"
-#include "../ConfigParser/Configuration.hpp"
-#include "../www/cgi/CgiHandler.hpp"
-#include "../www/cgi/CgiResponse.hpp"
-#include "Responder.hpp"
+#include "../../httpParser/HttpParser.hpp"
+#include "../../ConfigParser/Configuration.hpp"
+#include "../../www/cgi/CgiHandler.hpp"
+#include "../../www/cgi/CgiResponse.hpp"
+#include "../responses/Responder.hpp"
 #include <unistd.h>
 #include <iostream>
 #include <poll.h>

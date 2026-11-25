@@ -15,16 +15,18 @@ SRCS		= httpParser/HttpParser.cpp \
 			  ConfigParser/ConfigDirectiveParser.cpp \
 			  ConfigParser/ConfigParser.cpp \
 			  ConfigParser/ConfigLex.cpp \
-			  ServerHandler/Server.cpp \
-			  ServerHandler/ServerEvents.cpp \
-			  ServerHandler/HttpRequestProcessing.cpp \
-			  ServerHandler/HandleGet.cpp \
-			  ServerHandler/HandleDelete.cpp \
-			  ServerHandler/HandlePost.cpp \
-			  ServerHandler/ResponseOutput.cpp \
-			  ServerHandler/ResponseUtils.cpp \
-			  ServerHandler/Responder.cpp \
-			  ServerHandler/ServerErrors.cpp \
+			  ServerHandler/core/Server.cpp \
+			  ServerHandler/events/ServerEvents.cpp \
+			  ServerHandler/events/ServerClientState.cpp \
+			  ServerHandler/events/ServerPollEvents.cpp \
+			  ServerHandler/core/HttpRequestProcessing.cpp \
+			  ServerHandler/handlers/HandleGet.cpp \
+			  ServerHandler/handlers/HandleDelete.cpp \
+			  ServerHandler/handlers/HandlePost.cpp \
+			  ServerHandler/responses/ResponseOutput.cpp \
+			  ServerHandler/responses/ResponseUtils.cpp \
+			  ServerHandler/responses/Responder.cpp \
+			  ServerHandler/responses/ServerErrors.cpp \
 			  www/cgi/CgiHandler.cpp \
 			  www/cgi/CgiResponse.cpp \
 			  main.cpp

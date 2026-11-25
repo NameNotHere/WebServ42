@@ -1,10 +1,10 @@
 #ifndef RESPONDER_HPP
 #define RESPONDER_HPP
 
-#include "../ConfigParser/Configuration.hpp"
-#include "../httpParser/HttpParser.hpp"
-#include "../www/cgi/CgiHandler.hpp"
-#include "../www/cgi/CgiResponse.hpp"
+#include "../../ConfigParser/Configuration.hpp"
+#include "../../httpParser/HttpParser.hpp"
+#include "../../www/cgi/CgiHandler.hpp"
+#include "../../www/cgi/CgiResponse.hpp"
 #include <map>
 #include <string>
 #include <sys/types.h>

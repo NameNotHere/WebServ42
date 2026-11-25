@@ -1,4 +1,4 @@
-#include "Server.hpp"
+#include "../core/Server.hpp"
 
 const LocationConfig* findMatchingLocation(const ServerConfig& config, const std::string& target, const std::string& method)
 {

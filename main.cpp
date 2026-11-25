@@ -1,5 +1,5 @@
-#include "ServerHandler/Server.hpp"
-#include "ServerHandler/ServerInternal.hpp"
+#include "ServerHandler/core/Server.hpp"
+#include "ServerHandler/core/ServerInternal.hpp"
 #include "ConfigParser/Configuration.hpp"
 
 #include <fstream>

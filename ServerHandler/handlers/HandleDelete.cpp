@@ -1,4 +1,4 @@
-#include "Server.hpp"
+#include "../core/Server.hpp"
 #include <cstdio>
 
 bool handleDelete(int clientFd, const std::string& version, bool keepAlive, const std::string& rawTarget, const ServerConfig& config)

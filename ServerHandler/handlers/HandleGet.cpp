@@ -1,4 +1,4 @@
-#include "Server.hpp"
+#include "../core/Server.hpp"
 #include <cerrno>
 
 std::string GetEnding(const std::string& path);

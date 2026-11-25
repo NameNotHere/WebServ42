@@ -1,5 +1,5 @@
 #include "Responder.hpp"
-#include "ServerInternal.hpp"
+#include "../core/ServerInternal.hpp"
 #include <deque>
 #include <sstream>
 #include <sys/socket.h>

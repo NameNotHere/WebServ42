@@ -1,4 +1,4 @@
-#include "Server.hpp"
+#include "../core/Server.hpp"
 
 std::string makeErrorResponse(int code, const std::string& version, bool keepAlive, const std::vector<std::pair<std::string,std::string>>& extraHeaders, const ServerConfig* config)
 {
