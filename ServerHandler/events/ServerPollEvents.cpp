@@ -91,18 +91,20 @@ namespace ServerEventsInternal
         }
     }
 
-    void handleListenerEvent(const PollSource& source, short events,
+    void handleListenerEvent(const PollSource& source, short revents,
                              std::vector<Server>& hosting, std::vector<pollfd>& fds,
                              std::map<int, ServerConfig>& clientConfigs)
     {
-        if (!(events & POLLIN))
+        if (!(revents & POLLIN))
             return;
         for (size_t k = 0; k < hosting.size(); ++k)
+        {
             if (source.fd == hosting[k].serverFD)
             {
                 handleNewConnection(source.fd, hosting[k].conf, fds, clientConfigs);
                 break;
             }
+        }
     }
 
     void handleCgiPipeEvent(const PollSource& source, short events, CgiHandler& cgi,

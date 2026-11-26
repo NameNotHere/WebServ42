@@ -22,6 +22,7 @@ bool runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
 
         std::vector<pollfd> pollFds;
         std::vector<PollSource> sources;
+
         appendClientPollSources(hosting, fds, pollFds, sources);
         appendCgiPollSources(cgiJobs, pollFds, sources);
 
@@ -31,8 +32,6 @@ bool runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
         {
             if (shutdownRequested)
                 break;
-            if (errno == EINTR)
-                continue;
             int pollError = errno;
             std::cerr << "poll() failed: " << std::strerror(pollError) << '\n';
             pollFailed = true;
@@ -42,10 +41,10 @@ bool runEventLoop(std::vector<Server>& hosting, std::vector<pollfd>& fds,
             break;
         for (size_t j = 0; j < pollFds.size(); ++j)
         {
-            short events = pollFds[j].revents;
-            if (events == 0)
+            short revents = pollFds[j].revents;
+            if (revents == 0)
                 continue;
-            handlePollEvent(sources[j], events, hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
+            handlePollEvent(sources[j], revents, hosting, fds, reqs, clientConfigs, cgi, cgiJobs);
         }
         completeCgiJobs(cgi, cgiJobs, reqs, clientConfigs, fds);
     }
