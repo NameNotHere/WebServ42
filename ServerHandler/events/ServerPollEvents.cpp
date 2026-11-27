@@ -141,19 +141,19 @@ namespace ServerEventsInternal
         return false;
     }
 
-    void handleClientEvent(int fd, short events, std::vector<pollfd>& fds,
+    void handleClientEvent(int fd, short revents, std::vector<pollfd>& fds,
                            std::map<int, std::string>& reqs,
                            std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
                            std::map<int, CgiJob>& cgiJobs)
     {
         if (!clientIsConnected(fd, fds))
             return;
-        if (events & (POLLNVAL | POLLERR))
+        if (revents & (POLLNVAL | POLLERR))
         {
             removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
             return;
         }
-        if (events & POLLOUT)
+        if (revents & POLLOUT)
         {
             if (!flushPendingOutput(fd))
             {
@@ -166,9 +166,9 @@ namespace ServerEventsInternal
                 return;
             }
         }
-        if (!(events & POLLIN))
+        if (!(revents & POLLIN))
         {
-            if (events & POLLHUP)
+            if (revents & POLLHUP)
                 removeClient(fd, fds, reqs, clientConfigs, cgi, cgiJobs);
             return;
         }
@@ -206,7 +206,7 @@ namespace ServerEventsInternal
         }
     }
 
-    void handlePollEvent(const PollSource& source, short events,
+    void handlePollEvent(const PollSource& source, short revents,
                          std::vector<Server>& hosting, std::vector<pollfd>& fds,
                          std::map<int, std::string>& reqs,
                          std::map<int, ServerConfig>& clientConfigs, CgiHandler& cgi,
@@ -214,15 +214,15 @@ namespace ServerEventsInternal
     {
         if (source.kind == POLL_LISTENER)
         {
-            handleListenerEvent(source, events, hosting, fds, clientConfigs);
+            handleListenerEvent(source, revents, hosting, fds, clientConfigs);
             return;
         }
         if (source.kind == POLL_CGI_INPUT || source.kind == POLL_CGI_OUTPUT)
         {
-            handleCgiPipeEvent(source, events, cgi, cgiJobs);
+            handleCgiPipeEvent(source, revents, cgi, cgiJobs);
             return;
         }
-        handleClientEvent(source.clientFd, events, fds, reqs, clientConfigs,
+        handleClientEvent(source.clientFd, revents, fds, reqs, clientConfigs,
                           cgi, cgiJobs);
     }
 

@@ -13,9 +13,7 @@ namespace ServerInternal
 
     ClientTiming::ClientTiming()
         : lastActivity(std::chrono::steady_clock::now()),
-          requestStarted(), requestActive(false)
-    {
-    }
+          requestStarted(), requestActive(false){}
 
     void registerClient(int fd)
     {

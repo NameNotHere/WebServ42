@@ -6,7 +6,10 @@ namespace
 {
     bool setNonBlocking(int fd)
     {
-        return fcntl(fd, F_SETFL, O_NONBLOCK) != -1;
+        int result = fcntl(fd, F_SETFL, O_NONBLOCK);
+        if (result == -1)
+            return false;
+        return true;
     }
 }
 
